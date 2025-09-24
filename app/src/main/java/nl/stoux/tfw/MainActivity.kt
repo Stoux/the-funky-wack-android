@@ -6,8 +6,12 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
@@ -26,6 +30,7 @@ import nl.stoux.tfw.feature.browser.EditionListViewModel
 import nl.stoux.tfw.feature.player.PlayerScreen
 import nl.stoux.tfw.feature.player.PlayerViewModel
 import nl.stoux.tfw.ui.theme.TheFunkyWackTheme
+import androidx.compose.ui.unit.dp
 
 @AndroidEntryPoint
 @OptIn(ExperimentalMaterial3Api::class)
@@ -45,7 +50,22 @@ class MainActivity : ComponentActivity() {
 
                 Scaffold(
                     modifier = Modifier.fillMaxSize(),
-                    topBar = { TopAppBar(title = { Text("The Funky Wack") }) },
+                    topBar = {
+                        androidx.compose.material3.CenterAlignedTopAppBar(
+                            title = {
+                                androidx.compose.foundation.layout.Column(
+                                    horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally
+                                ) {
+                                    Text(text = "The Funky Wack", style = androidx.compose.material3.MaterialTheme.typography.titleLarge)
+                                    Text(
+                                        text = "Wacky beats, the recordings.",
+                                        style = androidx.compose.material3.MaterialTheme.typography.labelSmall,
+                                        color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        )
+                    },
                     bottomBar = {
                         if (isPlaying || nowTitle != null) {
                             NowPlayingBar(
@@ -76,13 +96,28 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 private fun NowPlayingBar(title: String, onPlayPause: () -> Unit, onOpenPlayer: () -> Unit) {
-    androidx.compose.foundation.layout.Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
-        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween
+    androidx.compose.material3.Surface(
+        modifier = Modifier
+            .navigationBarsPadding(),
+        color = androidx.compose.material3.MaterialTheme.colorScheme.surface
     ) {
-        // Title doubles as a button to open the full player
-        androidx.compose.material3.Text(text = title, style = androidx.compose.material3.MaterialTheme.typography.bodyLarge)
-        IconButton(onClick = onPlayPause) { androidx.compose.material3.Text("⏯") }
+        androidx.compose.foundation.layout.Column(modifier = Modifier.fillMaxWidth()) {
+            // Simple progress indicator (indeterminate for MVP)
+            androidx.compose.material3.LinearProgressIndicator(
+                modifier = Modifier.fillMaxWidth(),
+                trackColor = androidx.compose.material3.MaterialTheme.colorScheme.surfaceVariant,
+            )
+            androidx.compose.foundation.layout.Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 10.dp)
+                    .clickable { onOpenPlayer() },
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween
+            ) {
+                androidx.compose.material3.Text(text = title, style = androidx.compose.material3.MaterialTheme.typography.bodyLarge)
+                IconButton(onClick = onPlayPause) { androidx.compose.material3.Text("⏯") }
+            }
+        }
     }
 }
