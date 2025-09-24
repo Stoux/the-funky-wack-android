@@ -23,3 +23,4 @@ rootProject.name = "The Funky Wack"
 include(":app")
 include(":automotive")
 include(":core:common")
+include(":service:playback")
