@@ -22,8 +22,8 @@ import nl.stoux.tfw.core.common.database.dao.EditionWithContent
 
 @Composable
 fun EditionListScreen(
-    viewModel: EditionListViewModel,
     modifier: Modifier = Modifier,
+    viewModel: EditionListViewModel,
     onPlayClicked: (url: String, title: String?, artist: String?) -> Unit,
     onOpenPlayer: () -> Unit,
 ) {
