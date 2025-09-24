@@ -12,9 +12,14 @@
 
     <application>
         <service
-            android:name=".service.MediaPlaybackService"
+            android:name="nl.stoux.tfw.service.playback.service.MediaPlaybackService"
             android:exported="false"
-            android:foregroundServiceType="mediaPlayback" />
+            android:foregroundServiceType="mediaPlayback">
+            <!-- Declare as a MediaLibraryService so SessionToken validation passes -->
+            <intent-filter>
+                <action android:name="androidx.media3.session.MediaLibraryService" />
+            </intent-filter>
+        </service>
     </application>
 
 </manifest>
