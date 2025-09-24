@@ -1,6 +1,8 @@
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.ksp)
+    alias(libs.plugins.kotlin.serialization)
 }
 
 android {
@@ -33,10 +35,29 @@ android {
 }
 
 dependencies {
-
+    // Existing AndroidX base deps (optional in core lib)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
     implementation(libs.material)
+
+    // Room (database)
+    implementation(libs.room.runtime)
+    implementation(libs.room.ktx)
+    ksp(libs.room.compiler)
+
+    // Retrofit (networking) + Kotlinx Serialization converter
+    implementation(libs.retrofit)
+    implementation(libs.retrofit.serialization)
+
+    // Kotlinx Serialization (JSON)
+    implementation(libs.serialization.json)
+
+    // OkHttp (HTTP client)
+    implementation(platform(libs.okhttp.bom))
+    implementation(libs.okhttp)
+    implementation(libs.okhttp.logging)
+
+    // Test deps
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
