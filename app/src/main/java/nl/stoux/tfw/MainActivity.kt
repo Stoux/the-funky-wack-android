@@ -45,6 +45,7 @@ class MainActivity : ComponentActivity() {
             TheFunkyWackTheme {
                 val isPlaying by playerViewModel.isPlaying.collectAsState()
                 val nowTitle by playerViewModel.nowPlayingTitle.collectAsState()
+                val progress by playerViewModel.progress.collectAsState()
 
                 val navController = rememberNavController()
 
@@ -70,6 +71,7 @@ class MainActivity : ComponentActivity() {
                         if (isPlaying || nowTitle != null) {
                             NowPlayingBar(
                                 title = nowTitle ?: "Playing",
+                                progress = progress,
                                 onPlayPause = { playerViewModel.playPause() },
                                 onOpenPlayer = { navController.navigate("player") }
                             )
@@ -95,18 +97,27 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-private fun NowPlayingBar(title: String, onPlayPause: () -> Unit, onOpenPlayer: () -> Unit) {
+private fun NowPlayingBar(title: String, progress: Float?, onPlayPause: () -> Unit, onOpenPlayer: () -> Unit) {
     androidx.compose.material3.Surface(
         modifier = Modifier
             .navigationBarsPadding(),
         color = androidx.compose.material3.MaterialTheme.colorScheme.surface
     ) {
         androidx.compose.foundation.layout.Column(modifier = Modifier.fillMaxWidth()) {
-            // Simple progress indicator (indeterminate for MVP)
-            androidx.compose.material3.LinearProgressIndicator(
-                modifier = Modifier.fillMaxWidth(),
-                trackColor = androidx.compose.material3.MaterialTheme.colorScheme.surfaceVariant,
-            )
+            // Determinate progress when available, else indeterminate
+            val p = progress
+            if (p != null) {
+                androidx.compose.material3.LinearProgressIndicator(
+                    progress = { p.coerceIn(0f, 1f) },
+                    modifier = Modifier.fillMaxWidth(),
+                    trackColor = androidx.compose.material3.MaterialTheme.colorScheme.surfaceVariant,
+                )
+            } else {
+                androidx.compose.material3.LinearProgressIndicator(
+                    modifier = Modifier.fillMaxWidth(),
+                    trackColor = androidx.compose.material3.MaterialTheme.colorScheme.surfaceVariant,
+                )
+            }
             androidx.compose.foundation.layout.Row(
                 modifier = Modifier
                     .fillMaxWidth()
