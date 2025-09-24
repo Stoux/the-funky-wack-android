@@ -16,7 +16,7 @@
             <option value="$PROJECT_DIR$/core/common" />
             <option value="$PROJECT_DIR$/feature" />
             <option value="$PROJECT_DIR$/feature/browser" />
-            <option value="$PROJECT_DIR$/feature/library" />
+            <option value="$PROJECT_DIR$/feature/player" />
             <option value="$PROJECT_DIR$/service" />
             <option value="$PROJECT_DIR$/service/playback" />
           </set>
