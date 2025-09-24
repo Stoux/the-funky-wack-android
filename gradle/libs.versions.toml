@@ -17,6 +17,8 @@ okhttpBom = "4.12.0"
 serialization = "1.9.0"
 # Hilt
 hilt = "2.57.1"
+# Media3
+media3 = "1.8.0"
 # Plugins
 ksp = "2.2.20-2.0.3"
 
@@ -50,6 +52,10 @@ serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serializ
 # Hilt
 hilt-android = { group = "com.google.dagger", name = "hilt-android", version.ref = "hilt" }
 hilt-compiler = { group = "com.google.dagger", name = "hilt-compiler", version.ref = "hilt" }
+# Media3
+media3-exoplayer = { group = "androidx.media3", name = "media3-exoplayer", version.ref = "media3" }
+media3-session = { group = "androidx.media3", name = "media3-session", version.ref = "media3" }
+media3-ui = { group = "androidx.media3", name = "media3-ui", version.ref = "media3" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
