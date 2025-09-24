@@ -1,6 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- Required for foreground media playback services on API 28+ -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <!-- Required for apps targeting API 34+ to run a media playback foreground service -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <!-- Recommended for keeping CPU on during playback -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- Needed to stream media over network -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
     <application>
         <service
             android:name=".service.MediaPlaybackService"

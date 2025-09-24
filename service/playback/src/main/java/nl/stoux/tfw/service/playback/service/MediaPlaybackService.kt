@@ -1,22 +1,23 @@
 package nl.stoux.tfw.service.playback.service
 
-import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaSession
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
+import nl.stoux.tfw.service.playback.player.PlayerManager
 
 @AndroidEntryPoint
 class MediaPlaybackService : MediaLibraryService() {
 
     @Inject
-    lateinit var exoPlayer: ExoPlayer
+    lateinit var playerManager: PlayerManager
 
     private var mediaLibrarySession: MediaLibrarySession? = null
 
     override fun onCreate() {
         super.onCreate()
-        mediaLibrarySession = MediaLibrarySession.Builder(this, exoPlayer, SessionCallback())
+        val player = playerManager.currentPlayer()
+        mediaLibrarySession = MediaLibrarySession.Builder(this, player, SessionCallback())
             .setId("tfw-media-session")
             .build()
     }
@@ -26,7 +27,7 @@ class MediaPlaybackService : MediaLibraryService() {
     override fun onDestroy() {
         mediaLibrarySession?.release()
         mediaLibrarySession = null
-        exoPlayer.release()
+        playerManager.release()
         super.onDestroy()
     }
 
