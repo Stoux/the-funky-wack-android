@@ -39,7 +39,7 @@ interface EditionDao {
 
     // Reactive stream of the full catalog joined together
     @Transaction
-    @Query("SELECT * FROM editions ORDER BY date DESC, number DESC")
+    @Query("SELECT * FROM editions ORDER BY CAST(number AS INTEGER) DESC")
     fun getEditionsWithContent(): Flow<List<EditionWithContent>>
 
     // Upserts
