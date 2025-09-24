@@ -40,6 +40,7 @@ fun EditionListScreen(
     EditionList(
         editions = editions,
         onPlayClicked = onPlayClicked,
+        onOpenPlayer = onOpenPlayer,
         modifier = modifier
     )
 }
@@ -49,9 +50,10 @@ fun EditionListScreen(
 private fun EditionList(
     editions: List<EditionWithContent>,
     onPlayClicked: (url: String, title: String?, artist: String?) -> Unit,
+    onOpenPlayer: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    LazyColumn(modifier = modifier.fillMaxSize().padding(vertical = 12.dp)) {
+    LazyColumn(modifier = modifier.fillMaxSize().padding(vertical = 4.dp)) {
         editions.forEach { edition ->
             item(key = "header-${edition.edition.id}") {
                 Column {
@@ -60,6 +62,7 @@ private fun EditionList(
                         tagLine = edition.edition.tagLine,
                         date = edition.edition.date,
                         notes = edition.edition.notes,
+                        posterUrl = edition.edition.posterUrl,
                     )
                     Divider(color = MaterialTheme.colorScheme.surfaceVariant)
                 }
@@ -75,13 +78,15 @@ private fun EditionList(
                     isPlayable = listOfNotNull(lwd.liveset.losslessUrl, lwd.liveset.hqUrl, lwd.liveset.lqUrl).isNotEmpty(),
                     onPlay = {
                         val url = listOfNotNull(lwd.liveset.losslessUrl, lwd.liveset.hqUrl, lwd.liveset.lqUrl).firstOrNull()
-                        if (url != null) onPlayClicked(url, lwd.liveset.title, lwd.liveset.artistName)
+                        if (url != null) {
+                            onPlayClicked(url, lwd.liveset.title, lwd.liveset.artistName)
+                            onOpenPlayer()
+                        }
                     },
                     modifier = Modifier.padding(horizontal = 16.dp)
                 )
                 Divider(color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
             }
-            item { Spacer(Modifier.height(16.dp)) }
         }
     }
 }
@@ -92,6 +97,7 @@ private fun EditionHeader(
     tagLine: String?,
     date: String?,
     notes: String?,
+    posterUrl: String?,
     modifier: Modifier = Modifier
 ) {
     Row(
@@ -138,13 +144,14 @@ private fun EditionHeader(
                 )
             }
         }
-        // Right: poster placeholder box (we'll wire Coil later)
-        Box(
+        // Right: poster (Coil)
+        coil.compose.AsyncImage(
+            model = posterUrl,
+            contentDescription = "Edition poster",
             modifier = Modifier
                 .height(96.dp)
                 .clip(androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f))
-                .fillMaxWidth(0.18f)
+                .fillMaxWidth(0.18f),
         )
     }
 }

@@ -21,6 +21,8 @@ hilt = "2.57.1"
 media3 = "1.8.0"
 # Navigation
 navigation = "2.9.4"
+# Image loading
+coil = "2.7.0"
 # Plugins
 ksp = "2.2.20-2.0.3"
 
@@ -61,6 +63,8 @@ media3-session = { group = "androidx.media3", name = "media3-session", version.r
 media3-ui = { group = "androidx.media3", name = "media3-ui", version.ref = "media3" }
 # Navigation
 androidx-navigation-compose = { group = "androidx.navigation", name = "navigation-compose", version.ref = "navigation" }
+# Coil
+coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coil" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

@@ -104,16 +104,11 @@ private fun NowPlayingBar(title: String, progress: Float?, onPlayPause: () -> Un
         color = androidx.compose.material3.MaterialTheme.colorScheme.surface
     ) {
         androidx.compose.foundation.layout.Column(modifier = Modifier.fillMaxWidth()) {
-            // Determinate progress when available, else indeterminate
+            // Show progress only when known; otherwise no loading bar to avoid endless spinner
             val p = progress
             if (p != null) {
                 androidx.compose.material3.LinearProgressIndicator(
                     progress = { p.coerceIn(0f, 1f) },
-                    modifier = Modifier.fillMaxWidth(),
-                    trackColor = androidx.compose.material3.MaterialTheme.colorScheme.surfaceVariant,
-                )
-            } else {
-                androidx.compose.material3.LinearProgressIndicator(
                     modifier = Modifier.fillMaxWidth(),
                     trackColor = androidx.compose.material3.MaterialTheme.colorScheme.surfaceVariant,
                 )
