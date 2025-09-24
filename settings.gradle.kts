@@ -21,3 +21,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "The Funky Wack"
 include(":app")
+include(":automotive")
