@@ -1,0 +1,87 @@
+package nl.stoux.tfw.core.common.database.dao
+
+import androidx.room.Dao
+import androidx.room.Embedded
+import androidx.room.Query
+import androidx.room.Relation
+import androidx.room.Transaction
+import androidx.room.Upsert
+import kotlinx.coroutines.flow.Flow
+import nl.stoux.tfw.core.common.database.entity.EditionEntity
+import nl.stoux.tfw.core.common.database.entity.LivesetEntity
+import nl.stoux.tfw.core.common.database.entity.TrackEntity
+
+/**
+ * Relations used for loading the full catalog tree from Room.
+ */
+ data class LivesetWithDetails(
+    @Embedded val liveset: LivesetEntity,
+    @Relation(
+        parentColumn = "id",
+        entityColumn = "livesetId",
+        entity = TrackEntity::class
+    )
+    val tracks: List<TrackEntity>,
+)
+
+ data class EditionWithContent(
+    @Embedded val edition: EditionEntity,
+    @Relation(
+        parentColumn = "id",
+        entityColumn = "editionId",
+        entity = LivesetEntity::class
+    )
+    val livesets: List<LivesetWithDetails>
+)
+
+@Dao
+interface EditionDao {
+
+    // Reactive stream of the full catalog joined together
+    @Transaction
+    @Query("SELECT * FROM editions ORDER BY date DESC, number DESC")
+    fun getEditionsWithContent(): Flow<List<EditionWithContent>>
+
+    // Upserts
+    @Upsert
+    suspend fun upsertEditions(items: List<EditionEntity>)
+
+    @Upsert
+    suspend fun upsertLivesets(items: List<LivesetEntity>)
+
+    @Upsert
+    suspend fun upsertTracks(items: List<TrackEntity>)
+
+    // Clears (order matters due to FKs)
+    @Query("DELETE FROM tracks")
+    suspend fun clearTracks()
+
+    @Query("DELETE FROM livesets")
+    suspend fun clearLivesets()
+
+    @Query("DELETE FROM editions")
+    suspend fun clearEditions()
+
+    @Transaction
+    suspend fun clearAll() {
+        clearTracks()
+        clearLivesets()
+        clearEditions()
+    }
+
+    /**
+     * Replace entire catalog in a single transaction. Use RoomDatabase.withTransaction
+     * at the call site for atomicity across tables when calling this.
+     */
+    @Transaction
+    suspend fun replaceAll(
+        editions: List<EditionEntity>,
+        livesets: List<LivesetEntity>,
+        tracks: List<TrackEntity>
+    ) {
+        clearAll()
+        if (editions.isNotEmpty()) upsertEditions(editions)
+        if (livesets.isNotEmpty()) upsertLivesets(livesets)
+        if (tracks.isNotEmpty()) upsertTracks(tracks)
+    }
+}
