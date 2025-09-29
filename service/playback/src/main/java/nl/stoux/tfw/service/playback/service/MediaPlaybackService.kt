@@ -19,12 +19,14 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import nl.stoux.tfw.service.playback.player.PlayerManager
 import androidx.core.net.toUri
+import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.CommandButton
 import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionResult
 import nl.stoux.tfw.service.playback.service.session.CustomMediaId
 import nl.stoux.tfw.service.playback.service.session.LibraryManager
+import nl.stoux.tfw.service.playback.service.session.LivesetTrackManager
 
 @AndroidEntryPoint
 class MediaPlaybackService : MediaLibraryService() {
@@ -34,6 +36,8 @@ class MediaPlaybackService : MediaLibraryService() {
     @Inject lateinit var playerManager: PlayerManager
 
     @Inject lateinit var libraryManager: LibraryManager
+
+    @Inject lateinit var trackManager: LivesetTrackManager
 
     private var mediaLibrarySession: MediaLibrarySession? = null
 
@@ -67,7 +71,9 @@ class MediaPlaybackService : MediaLibraryService() {
             .build()
 
         // Add listener
-
+        trackManager.bind { hasPreviousTrack, hasNextTrack ->
+            Log.d("Bind", "Callback $hasPreviousTrack $hasNextTrack")
+        }
 
         // When service starts: refresh the editions & notify the session that it's root options have changed
         serviceIOScope.launch {
@@ -84,6 +90,7 @@ class MediaPlaybackService : MediaLibraryService() {
     override fun onDestroy() {
         Log.d("MediaPlaybackService", "onDestroy()")
 
+        trackManager.unbind()
         mediaLibrarySession?.release()
         mediaLibrarySession = null
         playerManager.release()
