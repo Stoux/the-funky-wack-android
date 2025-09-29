@@ -23,8 +23,13 @@ media3 = "1.8.0"
 navigation = "2.9.4"
 # Image loading
 coil = "2.7.0"
+# Coroutines
+coroutines = "1.10.2"
+# Car App
+carApp = "1.7.0"
 # Plugins
 ksp = "2.2.20-2.0.3"
+media = "1.6.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -65,6 +70,12 @@ media3-ui = { group = "androidx.media3", name = "media3-ui", version.ref = "medi
 androidx-navigation-compose = { group = "androidx.navigation", name = "navigation-compose", version.ref = "navigation" }
 # Coil
 coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coil" }
+# Coroutines
+coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
+# Car app
+androidx-car-app = { group = "androidx.car.app", name = "app", version.ref = "carApp" }
+androidx-car-app-automotive = { group = "androidx.car.app", name = "app-automotive", version.ref = "carApp" }
+androidx-media = { group = "androidx.media", name = "media", version.ref = "media" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

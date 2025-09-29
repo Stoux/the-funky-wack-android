@@ -44,6 +44,9 @@ dependencies {
     // UI is optional for service, but handy for future use
     implementation(libs.media3.ui)
 
+    // Coroutines (for repository access in callbacks)
+    implementation(libs.coroutines.android)
+
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
