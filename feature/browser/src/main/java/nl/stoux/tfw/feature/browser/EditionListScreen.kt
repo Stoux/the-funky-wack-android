@@ -28,12 +28,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import nl.stoux.tfw.core.common.database.dao.EditionWithContent
+import nl.stoux.tfw.service.playback.service.session.CustomMediaId
 
 @Composable
 fun EditionListScreen(
     modifier: Modifier = Modifier,
     viewModel: EditionListViewModel,
-    onPlayClicked: (url: String, title: String?, artist: String?) -> Unit,
+
+    onPlayClicked: (mediaId: CustomMediaId) -> Unit,
     onOpenPlayer: () -> Unit,
 ) {
     val editions by viewModel.editions.collectAsState()
@@ -49,7 +51,7 @@ fun EditionListScreen(
 @Composable
 private fun EditionList(
     editions: List<EditionWithContent>,
-    onPlayClicked: (url: String, title: String?, artist: String?) -> Unit,
+    onPlayClicked: (mediaId: CustomMediaId) -> Unit,
     onOpenPlayer: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -77,9 +79,10 @@ private fun EditionList(
                     // TODO: This resolve URL logic should be moved to the model and/or a service which provides the correct URL based on the preferred quality.
                     isPlayable = listOfNotNull(lwd.liveset.losslessUrl, lwd.liveset.hqUrl, lwd.liveset.lqUrl).isNotEmpty(),
                     onPlay = {
+                        val mediaId = CustomMediaId.forEntity(lwd.liveset)
                         val url = listOfNotNull(lwd.liveset.losslessUrl, lwd.liveset.hqUrl, lwd.liveset.lqUrl).firstOrNull()
                         if (url != null) {
-                            onPlayClicked(url, lwd.liveset.title, lwd.liveset.artistName)
+                            onPlayClicked(mediaId)
                             onOpenPlayer()
                         }
                     },

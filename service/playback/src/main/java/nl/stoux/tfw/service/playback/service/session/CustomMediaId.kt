@@ -4,7 +4,7 @@ import nl.stoux.tfw.core.common.database.entity.EditionEntity
 import nl.stoux.tfw.core.common.database.entity.LivesetEntity
 import nl.stoux.tfw.core.common.database.entity.TrackEntity
 
-data class CustomMediaId constructor(
+data class CustomMediaId(
     val original: String,
     val type: String = original,
     val id: Long? = null,

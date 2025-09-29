@@ -5,6 +5,7 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
@@ -17,6 +18,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import nl.stoux.tfw.service.playback.service.MediaPlaybackService
+import nl.stoux.tfw.service.playback.service.session.CustomMediaId
 
 @HiltViewModel
 class PlayerViewModel @Inject constructor(
@@ -102,16 +104,10 @@ class PlayerViewModel @Inject constructor(
         }
     }
 
-    fun playUrl(url: String, title: String? = null, artist: String? = null) {
+    fun playUrl(mediaId: CustomMediaId) {
         viewModelScope.launch {
             val item = MediaItem.Builder()
-                .setUri(url)
-                .setMediaMetadata(
-                    androidx.media3.common.MediaMetadata.Builder()
-                        .setTitle(title)
-                        .setArtist(artist)
-                        .build()
-                )
+                .setMediaId(mediaId.original)
                 .build()
             controller?.let { c ->
                 c.setMediaItem(item)
@@ -141,5 +137,14 @@ class PlayerViewModel @Inject constructor(
             val pos = (dur * fraction.coerceIn(0f, 1f)).toLong()
             seekTo(pos)
         }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        // Stop progress updates and release the controller to avoid leaks
+        progressJob?.cancel()
+        progressJob = null
+        controller?.release()
+        controller = null
     }
 }

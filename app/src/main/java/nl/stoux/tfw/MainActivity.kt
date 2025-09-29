@@ -82,7 +82,7 @@ class MainActivity : ComponentActivity() {
                         composable("list") {
                             EditionListScreen(
                                 viewModel = listViewModel,
-                                onPlayClicked = { url, title, artist -> playerViewModel.playUrl(url, title, artist) },
+                                onPlayClicked = { mediaId -> playerViewModel.playUrl(mediaId) },
                                 onOpenPlayer = { navController.navigate("player") }
                             )
                         }
