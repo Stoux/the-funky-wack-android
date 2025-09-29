@@ -16,6 +16,7 @@ import javax.inject.Singleton
 @Singleton
 class LibraryManager @Inject constructor(
     private val editionRepository: EditionRepository,
+    private val sessionSettings: SessionSettings,
 ) {
 
     suspend fun init() {
@@ -73,7 +74,9 @@ class LibraryManager @Inject constructor(
     }
 
     private fun getEditions(page: Int, pageSize: Int): List<MediaItem> {
+        sessionSettings.queueEditionLivesetsOnly = true
         val editions = paginate(loadEditions(), page, pageSize)
+
 
         return editions.map { ed ->
             MediaItem.Builder()
@@ -92,8 +95,10 @@ class LibraryManager @Inject constructor(
     }
 
     private fun getAllLivesets(page: Int, pageSize: Int): List<MediaItem> {
+        sessionSettings.queueEditionLivesetsOnly = false
         val livesets = runBlocking { editionRepository.getLivesets(page, pageSize).first() }
-        return livesets.map { liveset -> livesetMediaItem(liveset) }
+
+        return livesets.map { liveset -> livesetMediaItem(liveset, true) }
     }
 
     private fun getEditionLivesets(mediaId: CustomMediaId, page: Int, pageSize: Int): List<MediaItem> {
@@ -153,19 +158,59 @@ class LibraryManager @Inject constructor(
             .build()
     }
 
-    fun livesetMediaItem(
-        id: Long,
-    ) : MediaItem {
+    fun getQueueBasedForLiveset(id: Long): List<MediaItem> {
+        // Find the liveset
         val liveset = runBlocking { editionRepository.findLiveset(id).first() }
         if (liveset == null) throw IllegalArgumentException("Unknown liveset: $id")
 
-        return livesetMediaItem(liveset)
+        // Fetch all other livesets that should be in the queue
+        val livesetQueue = when {
+            sessionSettings.queueEditionLivesetsOnly -> runBlocking { editionRepository.getLivesets(liveset.edition.id).first() }
+            else -> runBlocking { editionRepository.getLivesets().first() }
+        }.filter { it ->
+            // Filter to only playable livesets
+            val liveset = it.liveset
+            (liveset.hqUrl ?: liveset.lqUrl ?: liveset.losslessUrl) != null
+        }
+
+
+        // Make our liveset the zero-index for the list (by moving all before it to the end)
+        val ourLivesetIndex = livesetQueue.indexOfFirst { it.liveset.id == liveset.liveset.id }
+        if (ourLivesetIndex == -1) {
+            // Should not happen, but if it does, just return the liveset
+            return listOf(livesetMediaItem(liveset))
+        }
+
+        val reorderedQueue = mutableListOf<LivesetWithDetails>()
+        reorderedQueue.add(livesetQueue[ourLivesetIndex]) // Our liveset is first
+        reorderedQueue.addAll(livesetQueue.subList(ourLivesetIndex + 1, livesetQueue.size)) // Add all after
+        reorderedQueue.addAll(livesetQueue.subList(0, ourLivesetIndex)) // Add all before
+
+        return reorderedQueue.map { livesetMediaItem(it) }
+    }
+
+    fun livesetMediaItem(
+        id: Long,
+    ): MediaItem {
+        val lwd = runBlocking { editionRepository.findLiveset(id).first() }
+        if (lwd == null) throw IllegalArgumentException("Unknown liveset: $id")
+
+        return livesetMediaItem(lwd)
     }
 
     private fun livesetMediaItem(
         lwd: LivesetWithDetails,
+        showEditionInfo: Boolean = false,
     ) : MediaItem {
         val mediaId = CustomMediaId.forEntity(lwd.liveset)
+
+        // Append edition information to title/artist when shown in big overall list
+        var title = lwd.liveset.title
+        var artist = lwd.liveset.artistName
+        if (showEditionInfo) {
+            title = "#${lwd.liveset.lineupOrder ?: "?"} $title"
+            artist = "TFW #${lwd.edition.number} - $artist"
+        }
 
         val playableUri = listOfNotNull(lwd.liveset.hqUrl, lwd.liveset.lqUrl, lwd.liveset.losslessUrl).firstOrNull()
         return MediaItem.Builder()
@@ -173,8 +218,8 @@ class LibraryManager @Inject constructor(
             .setUri(playableUri?.toUri())
             .setMediaMetadata(
                 MediaMetadata.Builder()
-                    .setTitle(lwd.liveset.title)
-                    .setArtist(lwd.liveset.artistName)
+                    .setTitle(title)
+                    .setArtist(artist)
                     .setTrackNumber(lwd.liveset.lineupOrder)
                     .setAlbumTitle("TFW #${lwd.edition.number}: ${lwd.edition.tagLine}")
                     .setIsBrowsable(lwd.tracks.firstOrNull{ it.timestampSec != null } != null)

@@ -28,7 +28,7 @@ interface EditionRepository {
 
     fun getLivesets(page: Int = 0, pageSize: Int = Int.MAX_VALUE): Flow<List<LivesetWithDetails>>
 
-    fun getLivesets(editionId: Long, page: Int, pageSize: Int): Flow<List<LivesetWithDetails>>
+    fun getLivesets(editionId: Long, page: Int = 0, pageSize: Int = Int.MAX_VALUE): Flow<List<LivesetWithDetails>>
 
     suspend fun refreshEditions()
 }

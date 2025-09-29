@@ -145,7 +145,13 @@ class MediaPlaybackService : MediaLibraryService() {
             browser: MediaSession.ControllerInfo,
             mediaId: String
         ): ListenableFuture<LibraryResult<MediaItem>> {
-            Log.d("OnGetItem", mediaId)
+            // Only Livesets are supported to directly fetch
+            val livesetId = CustomMediaId.from(mediaId).getLivesetId()
+            if (livesetId != null) {
+                val item = libraryManager.livesetMediaItem(livesetId)
+                return Futures.immediateFuture(LibraryResult.ofItem(item, null));
+            }
+
             return super.onGetItem(session, browser, mediaId)
         }
 
@@ -178,19 +184,27 @@ class MediaPlaybackService : MediaLibraryService() {
                 return Futures.immediateFuture(null)
             }
 
-            val items = mediaItems.mapNotNull { item -> resolvePlayableMediaItem(CustomMediaId.from(item.mediaId)) }
+            // Resolve the played item to a queue
+            val items: List<MediaItem> = when {
+                mediaItems.size >= 1 -> {
+                    if (mediaItems.size > 1) {
+                        Log.e("MediaPlaybackService", "Playback service received multiple Media items to play? Unsupported! IDs: ${mediaItems.joinToString { it.mediaId }}")
+                    }
 
-            Log.d("MediaPLaybackService", "Media items added (${mediaItems.size}: ${mediaItems.joinToString { it -> it.mediaId }}")
+                    resolveQueue(CustomMediaId.from(mediaItems[0].mediaId))
+                }
+                else -> emptyList()
+            }
 
             return Futures.immediateFuture(items)
         }
 
-        private fun resolvePlayableMediaItem( mediaId: CustomMediaId ): MediaItem? {
+        private fun resolveQueue( mediaId: CustomMediaId ): List<MediaItem> {
             // We only support playing
             val livesetId = mediaId.getLivesetId()
-            if (livesetId == null) return null
+            if (livesetId == null) return emptyList()
 
-            return libraryManager.livesetMediaItem(livesetId)
+            return libraryManager.getQueueBasedForLiveset(livesetId)
         }
 
 
