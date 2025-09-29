@@ -14,17 +14,26 @@ import nl.stoux.tfw.core.common.database.entity.TrackEntity
 /**
  * Relations used for loading the full catalog tree from Room.
  */
- data class LivesetWithDetails(
+data class LivesetWithDetails(
     @Embedded val liveset: LivesetEntity,
+
     @Relation(
         parentColumn = "id",
         entityColumn = "livesetId",
         entity = TrackEntity::class
     )
     val tracks: List<TrackEntity>,
+
+
+    @Relation(
+        parentColumn = "editionId",
+        entityColumn = "id",
+        entity = EditionEntity::class,
+    )
+    val edition: EditionEntity,
 )
 
- data class EditionWithContent(
+data class EditionWithContent(
     @Embedded val edition: EditionEntity,
     @Relation(
         parentColumn = "id",
@@ -41,6 +50,23 @@ interface EditionDao {
     @Transaction
     @Query("SELECT * FROM editions ORDER BY CAST(number AS INTEGER) DESC")
     fun getEditionsWithContent(): Flow<List<EditionWithContent>>
+
+    @Transaction
+    @Query("SELECT * FROM livesets WHERE id = :livesetId")
+    fun getLivesetById(livesetId: Long): Flow<LivesetWithDetails?>
+
+    @Transaction
+    @Query(
+        "SELECT ls.* FROM livesets ls " +
+            "INNER JOIN editions e ON ls.editionId = e.id " +
+            "ORDER BY CAST(e.number AS INTEGER) DESC, lineupOrder ASC, ls.id ASC " +
+            "LIMIT :pageSize OFFSET (:page * :pageSize)"
+    )
+    fun getLivesets(page: Int, pageSize: Int): Flow<List<LivesetWithDetails>>
+
+    @Transaction
+    @Query("SELECT * FROM livesets WHERE editionId = :editionId ORDER BY lineupOrder ASC, id ASC LIMIT :pageSize OFFSET (:page * :pageSize)" )
+    fun getEditionLivesets(editionId: Long, page: Int, pageSize: Int): Flow<List<LivesetWithDetails>>
 
     // Upserts
     @Upsert

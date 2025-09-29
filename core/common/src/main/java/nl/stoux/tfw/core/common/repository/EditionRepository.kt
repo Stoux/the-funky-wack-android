@@ -1,5 +1,6 @@
 package nl.stoux.tfw.core.common.repository
 
+import android.util.Log
 import androidx.room.withTransaction
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -22,6 +23,13 @@ import nl.stoux.tfw.core.common.network.ApiService
  */
 interface EditionRepository {
     fun getEditions(): Flow<List<EditionWithContent>>
+
+    fun findLiveset(id: Long): Flow<LivesetWithDetails?>
+
+    fun getLivesets(page: Int = 0, pageSize: Int = Int.MAX_VALUE): Flow<List<LivesetWithDetails>>
+
+    fun getLivesets(editionId: Long, page: Int, pageSize: Int): Flow<List<LivesetWithDetails>>
+
     suspend fun refreshEditions()
 }
 
@@ -50,6 +58,12 @@ class EditionRepositoryImpl @javax.inject.Inject constructor(
             }
         }
 
+    override fun findLiveset(id: Long): Flow<LivesetWithDetails?> = dao.getLivesetById(id)
+
+    override fun getLivesets(page: Int, pageSize: Int): Flow<List<LivesetWithDetails>> = dao.getLivesets(page, pageSize)
+
+    override fun getLivesets(editionId: Long, page: Int, pageSize: Int): Flow<List<LivesetWithDetails>> = dao.getEditionLivesets(editionId, page, pageSize)
+
     override suspend fun refreshEditions() = withContext(Dispatchers.IO) {
         try {
             val dtos = api.getEditions()
@@ -66,9 +80,12 @@ class EditionRepositoryImpl @javax.inject.Inject constructor(
                 }
             }
 
+            Log.d("TfwDao", "Editions ${editions.size} | Livesets ${livesets.size}")
+
             db.withTransaction {
                 dao.replaceAll(editions, livesets, tracks)
             }
+
         } catch (_: Throwable) {
             // Intentionally swallow to keep UI working with stale data
         }
