@@ -54,6 +54,18 @@ class LivesetTrackManager @Inject constructor(
         playerManager.currentPlayer().removeListener(this);
     }
 
+    fun toPreviousTrack() {
+        val previousTrack = currentTrackSection?.prev
+        if (previousTrack == null) return
+        playerManager.currentPlayer().seekTo(previousTrack.startAt)
+    }
+
+    fun toNextTrack() {
+        val nextTrack = currentTrackSection?.next
+        if (nextTrack == null) return
+        playerManager.currentPlayer().seekTo(nextTrack.startAt)
+    }
+
     override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
         // Parse the media item & check if it's a valid liveset
         val mediaId = if (mediaItem == null) null else CustomMediaId.from(mediaItem.mediaId)
@@ -98,6 +110,7 @@ class LivesetTrackManager @Inject constructor(
                 if (foundLivesetId == currentLivesetId) {
                     currentLiveset = liveset
                     currentTrackSection = trackLinkedList
+                    onTracksUpdated?.invoke(false, trackLinkedList.next != null)
                     updateTrackInformation()
                 }
             }
@@ -125,22 +138,26 @@ class LivesetTrackManager @Inject constructor(
         if (playingSection == currentTrackSection) {
             // We're already showing the correct item
             return;
+        } else if (playingSection == null) {
+            // Nothing playing?
+            onTracksUpdated?.invoke(false, false)
+            return;
         }
 
         // We've hit a different section! Make sure the underlying track has also changed
         this.currentTrackSection = playingSection
-        if (currentTrackSection.track?.id == playingSection?.track?.id) {
+        if (currentTrackSection.track?.id == playingSection.track?.id) {
             return; // Same track somehow. No need to update the player
         }
+
+        // Update the buttons
+        onTracksUpdated?.invoke(playingSection.prev != null, playingSection.next != null)
 
         // Sanity checks: we need liveset info
         val liveset = currentLiveset
         if (liveset == null) {
             return;
         }
-
-
-
 
         // Update the media player!
         // TODO: Make this an option
@@ -151,7 +168,7 @@ class LivesetTrackManager @Inject constructor(
         }
 
         // Default title should just be like the normal media item
-        val track = playingSection?.track
+        val track = playingSection.track
         var title = liveset.liveset.title
         var artist = liveset.liveset.artistName
         // But if we're showing a track, we move those to the artist & push the track title/artist/text into the title

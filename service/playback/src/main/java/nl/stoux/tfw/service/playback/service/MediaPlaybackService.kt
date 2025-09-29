@@ -53,26 +53,15 @@ class MediaPlaybackService : MediaLibraryService() {
         Log.d("MediaPlaybackService", "onCreate()")
         val player = playerManager.currentPlayer()
 
-        // In a shared constants file or inside your service
-        val previousTrackButton = CommandButton.Builder(CommandButton.ICON_SKIP_BACK)
-            .setDisplayName("Skip to previous track")
-            .setSessionCommand(commandPreviousTrack)
-            .build()
-
-        val nextTrackButton = CommandButton.Builder(CommandButton.ICON_SKIP_FORWARD)
-            .setDisplayName("Skip to next track")
-            .setSessionCommand(commandNextTrack)
-            .build()
-
         // Build the session
         mediaLibrarySession = MediaLibrarySession.Builder(this, player, SessionCallback())
             .setId("tfw-media-session")
-            .setCustomLayout(listOf(previousTrackButton, nextTrackButton))
+            .setCustomLayout(buildCustomLayout(false, false))
             .build()
 
         // Add listener
         trackManager.bind { hasPreviousTrack, hasNextTrack ->
-            Log.d("Bind", "Callback $hasPreviousTrack $hasNextTrack")
+            mediaLibrarySession?.setCustomLayout(buildCustomLayout(hasPreviousTrack, hasNextTrack))
         }
 
         // When service starts: refresh the editions & notify the session that it's root options have changed
@@ -84,6 +73,22 @@ class MediaPlaybackService : MediaLibraryService() {
         }
     }
 
+    fun buildCustomLayout(hasPreviousTrack: Boolean, hasNextTrack: Boolean): List<CommandButton> {
+        // In a shared constants file or inside your service
+        val previousTrackButton = CommandButton.Builder(CommandButton.ICON_SKIP_BACK)
+            .setDisplayName("Skip to previous track")
+            .setSessionCommand(commandPreviousTrack)
+            .setEnabled(hasPreviousTrack)
+            .build()
+
+        val nextTrackButton = CommandButton.Builder(CommandButton.ICON_SKIP_FORWARD)
+            .setDisplayName("Skip to next track")
+            .setSessionCommand(commandNextTrack)
+            .setEnabled(hasNextTrack)
+            .build()
+
+        return listOf(previousTrackButton, nextTrackButton);
+    }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? = mediaLibrarySession
 
@@ -119,7 +124,10 @@ class MediaPlaybackService : MediaLibraryService() {
             args: Bundle
         ): ListenableFuture<SessionResult> {
             if (customCommand == commandPreviousTrack) {
-                Log.d("Commands", "Toglge Skip Mode Called")
+                trackManager.toPreviousTrack()
+                return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+            } else if (customCommand == commandNextTrack) {
+                trackManager.toNextTrack()
                 return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
             }
 
