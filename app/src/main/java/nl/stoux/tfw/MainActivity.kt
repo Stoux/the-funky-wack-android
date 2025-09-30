@@ -5,26 +5,27 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.BottomSheetScaffold
+import androidx.compose.material3.rememberBottomSheetScaffoldState
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.SheetValue
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
-import androidx.navigation.compose.NavHost
-import androidx.navigation.compose.composable
-import androidx.navigation.compose.rememberNavController
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.launch
 import nl.stoux.tfw.feature.browser.EditionListScreen
 import nl.stoux.tfw.feature.browser.EditionListViewModel
 import nl.stoux.tfw.feature.player.PlayerScreen
@@ -47,47 +48,65 @@ class MainActivity : ComponentActivity() {
                 val nowTitle by playerViewModel.nowPlayingTitle.collectAsState()
                 val progress by playerViewModel.progress.collectAsState()
 
-                val navController = rememberNavController()
+                val scaffoldState = rememberBottomSheetScaffoldState()
+                val scope = rememberCoroutineScope()
 
-                Scaffold(
+                // Handle system back to close the player sheet when visible
+                BackHandler(enabled = scaffoldState.bottomSheetState.currentValue != SheetValue.Hidden) {
+                    scope.launch { scaffoldState.bottomSheetState.hide() }
+                }
+
+                BottomSheetScaffold(
                     modifier = Modifier.fillMaxSize(),
+                    scaffoldState = scaffoldState,
+                    sheetPeekHeight = 0.dp,
                     topBar = {
-                        androidx.compose.material3.CenterAlignedTopAppBar(
+                        CenterAlignedTopAppBar(
                             title = {
                                 androidx.compose.foundation.layout.Column(
                                     horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally
                                 ) {
-                                    Text(text = "The Funky Wack", style = androidx.compose.material3.MaterialTheme.typography.titleLarge)
+                                    Text(text = "The Funky Wack", style = MaterialTheme.typography.titleLarge)
                                     Text(
                                         text = "Wacky beats, the recordings.",
-                                        style = androidx.compose.material3.MaterialTheme.typography.labelSmall,
-                                        color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
                             }
                         )
                     },
-                    bottomBar = {
+                    sheetContent = {
+                        PlayerScreen(
+                            viewModel = playerViewModel,
+                            modifier = Modifier.navigationBarsPadding(),
+                            onCloseRequested = {
+                                scope.launch {
+                                    // Prefer hiding to fully close the overlay. TODO: consider partialExpand if peek > 0
+                                    scaffoldState.bottomSheetState.hide()
+                                }
+                            }
+                        )
+                    }
+                ) { innerPadding ->
+                    androidx.compose.foundation.layout.Column(modifier = Modifier
+                        .padding(innerPadding)
+                        .fillMaxSize()
+                    ) {
+                        androidx.compose.foundation.layout.Box(modifier = Modifier.weight(1f)) {
+                            EditionListScreen(
+                                viewModel = listViewModel,
+                                onPlayClicked = { mediaId -> playerViewModel.playLiveset(mediaId) },
+                                onOpenPlayer = { scope.launch { scaffoldState.bottomSheetState.expand() } }
+                            )
+                        }
                         if (isPlaying || nowTitle != null) {
                             NowPlayingBar(
                                 title = nowTitle ?: "Playing",
                                 progress = progress,
                                 onPlayPause = { playerViewModel.playPause() },
-                                onOpenPlayer = { navController.navigate("player") }
+                                onOpenPlayer = { scope.launch { scaffoldState.bottomSheetState.expand() } }
                             )
-                        }
-                    }
-                ) { innerPadding ->
-                    NavHost(navController = navController, startDestination = "list", modifier = Modifier.padding(innerPadding)) {
-                        composable("list") {
-                            EditionListScreen(
-                                viewModel = listViewModel,
-                                onPlayClicked = { mediaId -> playerViewModel.playUrl(mediaId) },
-                                onOpenPlayer = { navController.navigate("player") }
-                            )
-                        }
-                        composable("player") {
-                            PlayerScreen(viewModel = playerViewModel)
                         }
                     }
                 }

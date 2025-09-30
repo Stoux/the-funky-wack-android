@@ -2,10 +2,10 @@ package nl.stoux.tfw.feature.player
 
 import android.content.ComponentName
 import android.content.Context
+import androidx.core.os.bundleOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.MediaItem
-import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
@@ -16,17 +16,25 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import nl.stoux.tfw.core.common.database.dao.LivesetWithDetails
+import nl.stoux.tfw.core.common.database.entity.TrackEntity
 import nl.stoux.tfw.service.playback.service.MediaPlaybackService
+import nl.stoux.tfw.service.playback.service.manager.LivesetTrackListener
 import nl.stoux.tfw.service.playback.service.session.CustomMediaId
+import nl.stoux.tfw.service.playback.service.manager.UnbindCallback
+import nl.stoux.tfw.service.playback.service.manager.LivesetTrackManager
 
 @HiltViewModel
 class PlayerViewModel @Inject constructor(
     @ApplicationContext private val appContext: Context,
+    private val livesetTrackManager: LivesetTrackManager,
 ) : ViewModel() {
 
     private var controller: MediaController? = null
 
+    // Region: Core playback state
     private val _isPlaying = MutableStateFlow(false)
     val isPlaying: StateFlow<Boolean> = _isPlaying
 
@@ -44,7 +52,32 @@ class PlayerViewModel @Inject constructor(
 
     private var progressJob: Job? = null
 
+
+    private val _currentLiveset = MutableStateFlow<LivesetWithDetails?>(null)
+    val currentLiveset = _currentLiveset.asStateFlow()
+
+    private val _currentTrack = MutableStateFlow<TrackEntity?>(null)
+    val currentTrack = _currentTrack.asStateFlow()
+
+    // Region: Extended UI state (dummy values for now)
+    val appTitle: StateFlow<String> = MutableStateFlow("The Funky Wack")
+    private val _hasCast = MutableStateFlow(false) // TODO detect cast availability
+    val hasCast: StateFlow<Boolean> = _hasCast
+    private val _shuffleEnabled = MutableStateFlow(false)
+    val shuffleEnabled: StateFlow<Boolean> = _shuffleEnabled
+
+    // Liveset track skipping state
+    private val _canSkipPrevTrack = MutableStateFlow(false)
+    val canSkipPrevTrack: StateFlow<Boolean> = _canSkipPrevTrack.asStateFlow()
+    private val _canSkipNextTrack = MutableStateFlow(false)
+    val canSkipNextTrack: StateFlow<Boolean> = _canSkipNextTrack.asStateFlow()
+
+    var trackManagerUnbindCallback: UnbindCallback? = null
+
     init {
+        // Bind to LivesetTrackManager for track segment skipping within livesets
+        trackManagerUnbindCallback = livesetTrackManager.bind(TrackListener())
+
         // Build a MediaController connected to our service
         viewModelScope.launch {
             val token = SessionToken(appContext, ComponentName(appContext, MediaPlaybackService::class.java))
@@ -63,10 +96,15 @@ class PlayerViewModel @Inject constructor(
                     override fun onPlaybackStateChanged(playbackState: Int) {
                         updateDurations()
                     }
+                    override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) {
+                        _shuffleEnabled.value = shuffleModeEnabled
+                    }
                 })
+
                 // Initialize state
                 _isPlaying.value = controller?.isPlaying == true || controller?.playWhenReady == true
                 _nowPlayingTitle.value = controller?.currentMediaItem?.mediaMetadata?.title?.toString()
+                _shuffleEnabled.value = controller?.shuffleModeEnabled ?: false
                 updateDurations()
                 startOrStopProgressLoop(_isPlaying.value)
             }, { runnable -> runnable.run() })
@@ -104,7 +142,7 @@ class PlayerViewModel @Inject constructor(
         }
     }
 
-    fun playUrl(mediaId: CustomMediaId) {
+    fun playLiveset(mediaId: CustomMediaId) {
         viewModelScope.launch {
             val item = MediaItem.Builder()
                 .setMediaId(mediaId.original)
@@ -121,6 +159,38 @@ class PlayerViewModel @Inject constructor(
         controller?.let { c ->
             if (c.isPlaying) c.pause() else c.play()
         }
+    }
+
+    fun previousLiveset() {
+        controller?.seekToPrevious()
+    }
+
+    fun nextLiveset() {
+        controller?.seekToNext()
+    }
+
+    fun skipTrackBackward() {
+        controller?.sendCustomCommand(MediaPlaybackService.commandPreviousTrack, bundleOf())
+    }
+
+    fun skipTrackForward() {
+        controller?.sendCustomCommand(MediaPlaybackService.commandNextTrack, bundleOf())
+    }
+
+    fun toggleShuffle() {
+        controller?.let { c ->
+            val newVal = !(c.shuffleModeEnabled)
+            c.shuffleModeEnabled = newVal
+            _shuffleEnabled.value = newVal
+        }
+    }
+
+    fun openQueue() {
+        // TODO: Implement navigation to queue screen or show bottom sheet
+    }
+
+    fun onCloseRequested() {
+        // TODO: Hook to navigation back
     }
 
     fun seekTo(positionMs: Long) {
@@ -146,5 +216,34 @@ class PlayerViewModel @Inject constructor(
         progressJob = null
         controller?.release()
         controller = null
+        // Unbind from liveset track manager
+        trackManagerUnbindCallback?.invoke()
+        trackManagerUnbindCallback = null
     }
+
+    private inner class TrackListener : LivesetTrackListener {
+
+        override fun onNextPrevTrackStatusChanged(
+            hasPreviousTrack: Boolean,
+            hasNextTrack: Boolean
+        ) {
+            _canSkipPrevTrack.value = hasPreviousTrack
+            _canSkipNextTrack.value = hasNextTrack
+        }
+
+        override fun onTimeProgress(position: Long?, duration: Long?) {
+            updateDurations()
+        }
+
+        override fun onLivesetChanged(liveset: LivesetWithDetails?) {
+            _currentLiveset.value = liveset
+        }
+
+        override fun onTrackChanged(track: TrackEntity?) {
+            _currentTrack.value = track
+        }
+
+
+    }
+
 }

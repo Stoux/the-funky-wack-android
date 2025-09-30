@@ -39,6 +39,8 @@ dependencies {
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
+    // Material icons
+    implementation("androidx.compose.material:material-icons-extended")
 
     // Media3 controller (for PlayerViewModel)
     implementation(libs.media3.session)
