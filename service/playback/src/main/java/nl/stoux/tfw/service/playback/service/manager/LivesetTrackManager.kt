@@ -1,4 +1,4 @@
-package nl.stoux.tfw.service.playback.service.session
+package nl.stoux.tfw.service.playback.service.manager
 
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
@@ -13,6 +13,7 @@ import nl.stoux.tfw.core.common.database.dao.LivesetWithDetails
 import nl.stoux.tfw.core.common.database.entity.TrackEntity
 import nl.stoux.tfw.core.common.repository.EditionRepository
 import nl.stoux.tfw.service.playback.player.PlayerManager
+import nl.stoux.tfw.service.playback.service.session.CustomMediaId
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -34,7 +35,7 @@ class LivesetTrackManager @Inject constructor(
 
     private var currentTrackSection: TrackSection? = null
 
-    private var onUpdatedCallbacks: MutableList<RegisteredCallback> = mutableListOf()
+    private val listenersUpdater = ListenersUpdater()
 
     private var progressReporter = PlayingProgressReporter(serviceMainScope) {
         updateTrackInformation()
@@ -42,26 +43,29 @@ class LivesetTrackManager @Inject constructor(
 
     /**
      * Bind the track manager to the current player & service
+     *
+     * @return The callback to unbind
      */
     fun bind(
-        hashCode: Int,
-        onTracksUpdated: (hasPreviousTrack: Boolean, hasNextTrack: Boolean) -> Unit,
-    ) {
+        listener: LivesetTrackListener,
+        // TODO: Preferred refresh interval
+    ): UnbindCallback {
         // Register the listener if we're the first to hook into this manager
-        if (onUpdatedCallbacks.isEmpty()) {
+        if (listenersUpdater.isEmpty()) {
             playerManager.currentPlayer().addListener(this);
         }
 
-        this.onUpdatedCallbacks.add(RegisteredCallback(hashCode, onTracksUpdated))
+        listenersUpdater.addListener(listener)
+
+        return {
+            listenersUpdater.removeListener(listener)
+            unbindIfNoListeners()
+        }
     }
 
-    fun unbind(
-        hashCode: Int,
-    ) {
-        this.onUpdatedCallbacks = this.onUpdatedCallbacks.filter { it.hashCode != hashCode }.toMutableList()
-
+    private fun unbindIfNoListeners() {
         // Unregister the listener if there are no more callbacks to update
-        if (onUpdatedCallbacks.isEmpty()) {
+        if (listenersUpdater.isEmpty()) {
             progressReporter.stop()
             playerManager.currentPlayer().removeListener(this);
         }
@@ -81,7 +85,7 @@ class LivesetTrackManager @Inject constructor(
 
     override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
         // Parse the media item & check if it's a valid liveset
-        val mediaId = if (mediaItem == null) null else CustomMediaId.from(mediaItem.mediaId)
+        val mediaId = if (mediaItem == null) null else CustomMediaId.Companion.from(mediaItem.mediaId)
         val livesetId = mediaId?.getLivesetId()
         if (livesetId == null) {
             currentLiveset = null
@@ -123,7 +127,7 @@ class LivesetTrackManager @Inject constructor(
                 if (foundLivesetId == currentLivesetId) {
                     currentLiveset = liveset
                     currentTrackSection = trackLinkedList
-                    notifyCallbacks(false, trackLinkedList.next != null)
+                    listenersUpdater.onLivesetChanged(liveset, trackLinkedList.track)
                     updateTrackInformation()
                 }
             }
@@ -138,7 +142,18 @@ class LivesetTrackManager @Inject constructor(
         }
     }
 
+    override fun onPositionDiscontinuity(
+        oldPosition: Player.PositionInfo,
+        newPosition: Player.PositionInfo,
+        reason: Int
+    ) {
+        updateTrackInformation()
+    }
+
     fun updateTrackInformation() {
+        // Update the timer
+        // TODO
+
         // Early bail if we're missing stuff
         val currentTrackSection = this.currentTrackSection
         if (currentTrackSection == null) {
@@ -153,18 +168,18 @@ class LivesetTrackManager @Inject constructor(
             return;
         } else if (playingSection == null) {
             // Nothing playing?
-            notifyCallbacks(false, false)
+            listenersUpdater.onTrackChanged(null)
+            listenersUpdater.onNextPrevTrackStatusChanged(hasPreviousTrack = false, hasNextTrack = false)
             return;
         }
 
         // We've hit a different section! Make sure the underlying track has also changed
         this.currentTrackSection = playingSection
+        listenersUpdater.onTrackChanged(playingSection)
         if (currentTrackSection.track?.id == playingSection.track?.id) {
-            return; // Same track somehow. No need to update the player
+            // Same track somehow. No need to update the player. Might be a different next/prev?
+            return;
         }
-
-        // Update the buttons
-        notifyCallbacks(playingSection.prev != null, playingSection.next != null)
 
         // Sanity checks: we need liveset info
         val liveset = currentLiveset
@@ -203,11 +218,6 @@ class LivesetTrackManager @Inject constructor(
         player.replaceMediaItem(player.currentMediaItemIndex, updatedMediaItem)
     }
 
-    private fun notifyCallbacks(hasPreviousTrack: Boolean, hasNextTrack: Boolean) {
-        onUpdatedCallbacks.forEach { it.callback.invoke(hasPreviousTrack, hasNextTrack) }
-    }
-
-
     private inner class PlayingProgressReporter(
         private val scope: CoroutineScope,
         private val report: (currentPositionInMs: Long) -> Unit,
@@ -233,7 +243,7 @@ class LivesetTrackManager @Inject constructor(
         }
     }
 
-    private class TrackSection(
+    class TrackSection(
         val startAt: Long,
         val track: TrackEntity?,
         var prev: TrackSection? = null,
@@ -264,4 +274,8 @@ class LivesetTrackManager @Inject constructor(
         val callback: (hasPreviousTrack: Boolean, hasNextTrack: Boolean) -> Unit,
     )
 
+
+
 }
+
+typealias UnbindCallback = () -> Unit

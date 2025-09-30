@@ -1,7 +1,6 @@
 package nl.stoux.tfw.service.playback.service
 
 import androidx.media3.common.MediaItem
-import androidx.media3.common.MediaMetadata
 import android.os.Bundle
 import android.util.Log
 import androidx.annotation.OptIn
@@ -15,18 +14,17 @@ import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import javax.inject.Inject
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import nl.stoux.tfw.service.playback.player.PlayerManager
-import androidx.core.net.toUri
-import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.CommandButton
 import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionResult
+import nl.stoux.tfw.service.playback.service.manager.LivesetTrackListener
 import nl.stoux.tfw.service.playback.service.session.CustomMediaId
 import nl.stoux.tfw.service.playback.service.session.LibraryManager
-import nl.stoux.tfw.service.playback.service.session.LivesetTrackManager
+import nl.stoux.tfw.service.playback.service.manager.LivesetTrackManager
+import nl.stoux.tfw.service.playback.service.manager.UnbindCallback
 
 @AndroidEntryPoint
 class MediaPlaybackService : MediaLibraryService() {
@@ -44,8 +42,7 @@ class MediaPlaybackService : MediaLibraryService() {
     private val serviceIOScope = CoroutineScope(Dispatchers.IO)
     private val serviceMainScope = CoroutineScope(Dispatchers.Main)
 
-    private val commandPreviousTrack = SessionCommand("track::previous", Bundle.EMPTY)
-    private val commandNextTrack = SessionCommand("track::next", Bundle.EMPTY)
+    private var trackManagerUnbindCallback: UnbindCallback? = null
 
     @OptIn(UnstableApi::class)
     override fun onCreate() {
@@ -60,9 +57,7 @@ class MediaPlaybackService : MediaLibraryService() {
             .build()
 
         // Add listener
-        trackManager.bind(this.hashCode()) { hasPreviousTrack, hasNextTrack ->
-            mediaLibrarySession?.setCustomLayout(buildCustomLayout(hasPreviousTrack, hasNextTrack))
-        }
+        trackManagerUnbindCallback = trackManager.bind(TrackListener())
 
         // When service starts: refresh the editions & notify the session that it's root options have changed
         serviceIOScope.launch {
@@ -95,7 +90,8 @@ class MediaPlaybackService : MediaLibraryService() {
     override fun onDestroy() {
         Log.d("MediaPlaybackService", "onDestroy()")
 
-        trackManager.unbind(hashCode())
+        trackManagerUnbindCallback?.invoke()
+        trackManagerUnbindCallback = null
         mediaLibrarySession?.release()
         mediaLibrarySession = null
         playerManager.release()
@@ -222,6 +218,21 @@ class MediaPlaybackService : MediaLibraryService() {
             return libraryManager.getQueueBasedForLiveset(livesetId)
         }
 
+    }
 
+    private inner class TrackListener: LivesetTrackListener{
+
+        override fun onNextPrevTrackStatusChanged(
+            hasPreviousTrack: Boolean,
+            hasNextTrack: Boolean
+        ) {
+            mediaLibrarySession?.setCustomLayout(buildCustomLayout(hasPreviousTrack, hasNextTrack))
+        }
+
+    }
+
+    companion object {
+        val commandPreviousTrack = SessionCommand("track::previous", Bundle.EMPTY)
+        val commandNextTrack = SessionCommand("track::next", Bundle.EMPTY)
     }
 }
