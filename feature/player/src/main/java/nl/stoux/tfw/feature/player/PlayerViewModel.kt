@@ -53,7 +53,7 @@ class PlayerViewModel @Inject constructor(
                 controller = future.get()
                 controller?.addListener(object : Player.Listener {
                     override fun onIsPlayingChanged(isPlaying: Boolean) {
-                        _isPlaying.value = isPlaying
+                        _isPlaying.value = isPlaying || controller?.playWhenReady == true;
                         startOrStopProgressLoop(isPlaying)
                     }
                     override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
@@ -65,7 +65,7 @@ class PlayerViewModel @Inject constructor(
                     }
                 })
                 // Initialize state
-                _isPlaying.value = controller?.isPlaying ?: false
+                _isPlaying.value = controller?.isPlaying == true || controller?.playWhenReady == true
                 _nowPlayingTitle.value = controller?.currentMediaItem?.mediaMetadata?.title?.toString()
                 updateDurations()
                 startOrStopProgressLoop(_isPlaying.value)
