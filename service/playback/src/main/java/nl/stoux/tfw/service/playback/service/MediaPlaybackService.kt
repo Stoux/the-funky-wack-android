@@ -60,7 +60,7 @@ class MediaPlaybackService : MediaLibraryService() {
             .build()
 
         // Add listener
-        trackManager.bind { hasPreviousTrack, hasNextTrack ->
+        trackManager.bind(this.hashCode()) { hasPreviousTrack, hasNextTrack ->
             mediaLibrarySession?.setCustomLayout(buildCustomLayout(hasPreviousTrack, hasNextTrack))
         }
 
@@ -95,7 +95,7 @@ class MediaPlaybackService : MediaLibraryService() {
     override fun onDestroy() {
         Log.d("MediaPlaybackService", "onDestroy()")
 
-        trackManager.unbind()
+        trackManager.unbind(hashCode())
         mediaLibrarySession?.release()
         mediaLibrarySession = null
         playerManager.release()

@@ -1,6 +1,5 @@
 package nl.stoux.tfw.service.playback.service.session
 
-import android.util.Log
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import kotlinx.coroutines.CoroutineScope
@@ -15,10 +14,12 @@ import nl.stoux.tfw.core.common.database.entity.TrackEntity
 import nl.stoux.tfw.core.common.repository.EditionRepository
 import nl.stoux.tfw.service.playback.player.PlayerManager
 import javax.inject.Inject
+import javax.inject.Singleton
 
 /**
  * Manager that provides utility methods for skipping tracks inside the current playlist (if supported)
  */
+@Singleton
 class LivesetTrackManager @Inject constructor(
     private val playerManager: PlayerManager,
     private val editionRepository: EditionRepository,
@@ -33,7 +34,7 @@ class LivesetTrackManager @Inject constructor(
 
     private var currentTrackSection: TrackSection? = null
 
-    private var onTracksUpdated: ((hasPreviousTrack: Boolean, hasNextTrack: Boolean) -> Unit)? = null
+    private var onUpdatedCallbacks: MutableList<RegisteredCallback> = mutableListOf()
 
     private var progressReporter = PlayingProgressReporter(serviceMainScope) {
         updateTrackInformation()
@@ -43,15 +44,27 @@ class LivesetTrackManager @Inject constructor(
      * Bind the track manager to the current player & service
      */
     fun bind(
+        hashCode: Int,
         onTracksUpdated: (hasPreviousTrack: Boolean, hasNextTrack: Boolean) -> Unit,
     ) {
-        this.onTracksUpdated = onTracksUpdated
-        playerManager.currentPlayer().addListener(this);
+        // Register the listener if we're the first to hook into this manager
+        if (onUpdatedCallbacks.isEmpty()) {
+            playerManager.currentPlayer().addListener(this);
+        }
+
+        this.onUpdatedCallbacks.add(RegisteredCallback(hashCode, onTracksUpdated))
     }
 
-    fun unbind() {
-        progressReporter.stop()
-        playerManager.currentPlayer().removeListener(this);
+    fun unbind(
+        hashCode: Int,
+    ) {
+        this.onUpdatedCallbacks = this.onUpdatedCallbacks.filter { it.hashCode != hashCode }.toMutableList()
+
+        // Unregister the listener if there are no more callbacks to update
+        if (onUpdatedCallbacks.isEmpty()) {
+            progressReporter.stop()
+            playerManager.currentPlayer().removeListener(this);
+        }
     }
 
     fun toPreviousTrack() {
@@ -110,7 +123,7 @@ class LivesetTrackManager @Inject constructor(
                 if (foundLivesetId == currentLivesetId) {
                     currentLiveset = liveset
                     currentTrackSection = trackLinkedList
-                    onTracksUpdated?.invoke(false, trackLinkedList.next != null)
+                    notifyCallbacks(false, trackLinkedList.next != null)
                     updateTrackInformation()
                 }
             }
@@ -140,7 +153,7 @@ class LivesetTrackManager @Inject constructor(
             return;
         } else if (playingSection == null) {
             // Nothing playing?
-            onTracksUpdated?.invoke(false, false)
+            notifyCallbacks(false, false)
             return;
         }
 
@@ -151,7 +164,7 @@ class LivesetTrackManager @Inject constructor(
         }
 
         // Update the buttons
-        onTracksUpdated?.invoke(playingSection.prev != null, playingSection.next != null)
+        notifyCallbacks(playingSection.prev != null, playingSection.next != null)
 
         // Sanity checks: we need liveset info
         val liveset = currentLiveset
@@ -188,6 +201,10 @@ class LivesetTrackManager @Inject constructor(
             .build()
 
         player.replaceMediaItem(player.currentMediaItemIndex, updatedMediaItem)
+    }
+
+    private fun notifyCallbacks(hasPreviousTrack: Boolean, hasNextTrack: Boolean) {
+        onUpdatedCallbacks.forEach { it.callback.invoke(hasPreviousTrack, hasNextTrack) }
     }
 
 
@@ -241,5 +258,10 @@ class LivesetTrackManager @Inject constructor(
         }
 
     }
+
+    private data class RegisteredCallback(
+        val hashCode: Int,
+        val callback: (hasPreviousTrack: Boolean, hasNextTrack: Boolean) -> Unit,
+    )
 
 }
