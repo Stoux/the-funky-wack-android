@@ -13,10 +13,9 @@ import javax.inject.Singleton
  */
 @Singleton
 class PlayerManager @Inject constructor(
-    private val exoPlayer: ExoPlayer,
+    exoPlayer: ExoPlayer,
 ) {
     private val _activePlayer = MutableStateFlow<Player>(exoPlayer)
-    val activePlayer: StateFlow<Player> = _activePlayer
 
     fun currentPlayer(): Player = _activePlayer.value
 
