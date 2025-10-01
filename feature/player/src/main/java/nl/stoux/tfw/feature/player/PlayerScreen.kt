@@ -1,6 +1,7 @@
 package nl.stoux.tfw.feature.player
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -178,7 +179,9 @@ fun PlayerScreen(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     textAlign = TextAlign.Center,
-                    modifier = Modifier.weight(2f)
+                    modifier = Modifier.weight(3f).basicMarquee(
+                        iterations = Int.MAX_VALUE,
+                    )
                 )
                 Text(
                     text = formatTime(durationMs),
