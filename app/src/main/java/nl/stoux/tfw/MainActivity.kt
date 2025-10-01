@@ -125,7 +125,7 @@ class MainActivity : ComponentActivity() {
                                 }
                             },
                             onGoFullScreen = {
-                                playerIsFullScreen = true
+//                                playerIsFullScreen = true
                             }
                         )
                     }
@@ -177,7 +177,7 @@ private fun NowPlayingBar(
             .background(Color.Black.copy(alpha = 0.72f)),
         color = MaterialTheme.colorScheme.surface
     ) {
-        androidx.compose.foundation.layout.Column(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.fillMaxWidth()) {
             // Show progress only when known; otherwise no loading bar to avoid endless spinner
             val p = progress
             if (p != null) {
