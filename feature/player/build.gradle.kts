@@ -4,6 +4,7 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.hilt)
     alias(libs.plugins.ksp)
+    alias(libs.plugins.kotlin.serialization)
 }
 
 android {
@@ -44,6 +45,10 @@ dependencies {
 
     // Image loading for poster
     implementation(libs.coil.compose)
+
+    // Retrofit & Kotlinx Serialization for waveform download
+    implementation(libs.retrofit)
+    implementation(libs.serialization.json)
 
     // Media3 controller (for PlayerViewModel)
     implementation(libs.media3.session)

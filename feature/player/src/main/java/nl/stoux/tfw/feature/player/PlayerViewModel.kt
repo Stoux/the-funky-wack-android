@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import nl.stoux.tfw.core.common.database.dao.LivesetWithDetails
 import nl.stoux.tfw.core.common.database.entity.TrackEntity
+import nl.stoux.tfw.feature.player.waveforms.WaveformDownloader
 import nl.stoux.tfw.service.playback.service.MediaPlaybackService
 import nl.stoux.tfw.service.playback.service.manager.LivesetTrackListener
 import nl.stoux.tfw.service.playback.service.session.CustomMediaId
@@ -30,6 +31,7 @@ import nl.stoux.tfw.service.playback.service.manager.LivesetTrackManager
 class PlayerViewModel @Inject constructor(
     @ApplicationContext private val appContext: Context,
     private val livesetTrackManager: LivesetTrackManager,
+    private val waveformDownloader: WaveformDownloader,
 ) : ViewModel() {
 
     private var controller: MediaController? = null
@@ -52,6 +54,9 @@ class PlayerViewModel @Inject constructor(
 
     private val _isBuffering = MutableStateFlow(false)
     val isBuffering: StateFlow<Boolean> = _isBuffering
+
+    private val _waveformPeaks = MutableStateFlow<List<Int>?>(emptyList())
+    val waveformPeaks = _waveformPeaks.asStateFlow()
 
     private var progressJob: Job? = null
 
@@ -239,6 +244,15 @@ class PlayerViewModel @Inject constructor(
 
         override fun onLivesetChanged(liveset: LivesetWithDetails?) {
             _currentLiveset.value = liveset
+
+            // Check if we need to load a new waveform
+            val waveformUrl = liveset?.liveset?.audioWaveformUrl
+            if (waveformUrl != null) {
+                waveformDownloader.loadWaveform(waveformUrl) { data ->
+                    _waveformPeaks.value = data
+                }
+            } else
+                _waveformPeaks.value = null
         }
 
         override fun onTrackChanged(track: TrackEntity?) {

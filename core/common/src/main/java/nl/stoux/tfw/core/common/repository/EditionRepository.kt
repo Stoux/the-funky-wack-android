@@ -17,6 +17,7 @@ import nl.stoux.tfw.core.common.mappers.toEditionEntity
 import nl.stoux.tfw.core.common.mappers.toLivesetEntity
 import nl.stoux.tfw.core.common.mappers.toTrackEntity
 import nl.stoux.tfw.core.common.network.ApiService
+import javax.inject.Inject
 
 /**
  * Stale-While-Revalidate repository for Editions & associated content.
@@ -33,7 +34,7 @@ interface EditionRepository {
     suspend fun refreshEditions()
 }
 
-class EditionRepositoryImpl @javax.inject.Inject constructor(
+class EditionRepositoryImpl @Inject constructor(
     private val api: ApiService,
     private val db: AppDatabase,
 ) : EditionRepository {

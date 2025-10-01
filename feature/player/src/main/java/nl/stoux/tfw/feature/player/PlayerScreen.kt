@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -62,6 +63,7 @@ import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import nl.stoux.tfw.core.common.database.entity.TrackEntity
+import nl.stoux.tfw.feature.player.waveforms.ZoomableWaveform
 
 @Composable
 fun PlayerScreen(
@@ -89,15 +91,16 @@ fun PlayerScreen(
         }
     }
 
-    Box(modifier = modifier
-        .background(Color.Black.copy(alpha = 0.72f))
-        .let {
-            if (playerControlsContainerHeight != null) {
-                it.height(playerControlsContainerHeight!!)
-            } else {
-                it
+    Box(
+        modifier = modifier
+            .background(Color.Black.copy(alpha = 0.72f))
+            .let {
+                if (playerControlsContainerHeight != null) {
+                    it.height(playerControlsContainerHeight!!)
+                } else {
+                    it
+                }
             }
-        }
     ) {
 
         val scrollState = rememberScrollState()
@@ -108,7 +111,7 @@ fun PlayerScreen(
         LaunchedEffect(scrollState) {
             snapshotFlow { scrollState.value }
                 .distinctUntilChanged()
-                .filter{ scrollState.isScrollInProgress }
+                .filter { scrollState.isScrollInProgress }
                 .map { currentState ->
                     val isScrolling = currentState > lastScrollState
                     lastScrollState = currentState
@@ -125,12 +128,15 @@ fun PlayerScreen(
             modifier = Modifier.verticalScroll(scrollState)
         ) {
 
-            Box(modifier = Modifier.fillMaxWidth()
-                .onGloballyPositioned { coordinates ->
-                    if (playerControlsContainerHeight == null) {
-                        playerControlsContainerHeight = with(density) { coordinates.size.height.toDp() + 4.dp  }
-                    }
-                }) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .onGloballyPositioned { coordinates ->
+                        if (playerControlsContainerHeight == null) {
+                            playerControlsContainerHeight =
+                                with(density) { coordinates.size.height.toDp() + 4.dp }
+                        }
+                    }) {
 
                 BackgroundPoster(
                     posterUrl = liveset?.edition?.posterUrl,
@@ -211,8 +217,9 @@ fun BackgroundPoster(posterUrl: String?, modifier: Modifier) {
     )
 
     // Heavy gray/black overlay for readability
-    Box(modifier = modifier
-        .background(brush = scrimBrush)
+    Box(
+        modifier = modifier
+            .background(brush = scrimBrush)
     ) {}
 }
 
@@ -248,7 +255,9 @@ fun PlayerControls(
             liveset?.edition?.number ?: "0" // TODO: Replace fallback when data guaranteed
         val taglineStr = liveset?.edition?.tagLine?.trim().orEmpty()
         Column(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = boxPadding),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = boxPadding),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
@@ -276,7 +285,9 @@ fun PlayerControls(
 
         Spacer(Modifier.height(12.dp))
         // Track/Liveset/Artist block
-        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = boxPadding)) {
+        Column(modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = boxPadding)) {
             Text(
                 text = liveset?.liveset?.title ?: "",
                 style = MaterialTheme.typography.titleMedium,
@@ -298,24 +309,33 @@ fun PlayerControls(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(214.dp)
-                .background(MaterialTheme.colorScheme.surfaceVariant),
+                .height(214.dp),
+//                .background(MaterialTheme.colorScheme.surfaceVariant),
             contentAlignment = Alignment.Center
         ) {
-            Text(
-                "Waveform",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            val p = progress ?: 0f
-            Slider(
-                value = p,
-                onValueChange = { viewModel.seekToPercent(it) },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .align(Alignment.BottomCenter)
-                    .padding(horizontal = 8.dp, vertical = 8.dp)
-            )
+            val waveformPeaks = viewModel.waveformPeaks.collectAsState()
+
+            val peaks = waveformPeaks.value
+            if (peaks != null && peaks.isNotEmpty()) {
+                // Interactive waveform: tap to seek, pinch to zoom, pan to scroll
+                ZoomableWaveform(
+                    fullPeaks = peaks,
+                    progress = (progress ?: 0f).coerceIn(0f, 1f),
+                    onProgressChange = { p -> viewModel.seekToPercent(p) },
+                    modifier = Modifier
+                        .matchParentSize()
+                )
+            } else {
+                // Fallback when no waveform is available yet
+                Slider(
+                    value = (progress ?: 0f).coerceIn(0f, 1f),
+                    onValueChange = { viewModel.seekToPercent(it) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .align(Alignment.BottomCenter)
+                        .padding(horizontal = 8.dp, vertical = 8.dp)
+                )
+            }
         }
 
         Column(
@@ -340,9 +360,11 @@ fun PlayerControls(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     textAlign = TextAlign.Center,
-                    modifier = Modifier.weight(3f).basicMarquee(
-                        iterations = Int.MAX_VALUE,
-                    )
+                    modifier = Modifier
+                        .weight(3f)
+                        .basicMarquee(
+                            iterations = Int.MAX_VALUE,
+                        )
                 )
                 Text(
                     text = formatTime(durationMs),
@@ -433,7 +455,10 @@ fun PlayerControls(
                         Spacer(modifier = Modifier.size(4.dp))
                     }
                     IconButton(onClick = { viewModel.openQueue() }) {
-                        Icon(imageVector = Icons.AutoMirrored.Filled.QueueMusic, contentDescription = "Queue")
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.QueueMusic,
+                            contentDescription = "Queue"
+                        )
                     }
                 }
             }
@@ -450,7 +475,10 @@ fun PlayerControls(
                     enabled = showDetails
                 ) {
                     // TODO: Little bounce when it comes into view
-                    Icon(imageVector = Icons.Filled.KeyboardDoubleArrowDown, contentDescription = "View more details")
+                    Icon(
+                        imageVector = Icons.Filled.KeyboardDoubleArrowDown,
+                        contentDescription = "View more details"
+                    )
                 }
             }
 
@@ -513,11 +541,13 @@ fun TrackList(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 val timestampSeconds = track.timestampSec
-                val formattedTime = if (timestampSeconds == null) null else formatTime(timestampSeconds * 1000L)
+                val formattedTime =
+                    if (timestampSeconds == null) null else formatTime(timestampSeconds * 1000L)
 
                 Column(modifier = Modifier.weight(1f)) {
                     val isCurrent = currentTrack?.id == track.id
-                    val metaColor = if (isCurrent) Color.Green /* TODO: Use theme */ else MaterialTheme.colorScheme.secondary
+                    val metaColor =
+                        if (isCurrent) Color.Green /* TODO: Use theme */ else MaterialTheme.colorScheme.secondary
 
                     val metaText = buildString {
                         append("#${track.orderInSet}")
@@ -544,7 +574,10 @@ fun TrackList(
                 // Right: play from timestamp button (icon only, no background)
                 if (timestampSeconds != null && formattedTime != null) {
                     IconButton(onClick = { seekToTrack(timestampSeconds) }) {
-                        Icon(imageVector = Icons.Filled.PlayArrow, contentDescription = "Play from $formattedTime")
+                        Icon(
+                            imageVector = Icons.Filled.PlayArrow,
+                            contentDescription = "Play from $formattedTime"
+                        )
                     }
                 }
             }
