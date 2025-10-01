@@ -20,6 +20,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.SheetValue
 import androidx.compose.runtime.Composable
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
@@ -51,15 +54,16 @@ class MainActivity : ComponentActivity() {
                 val scaffoldState = rememberBottomSheetScaffoldState()
                 val scope = rememberCoroutineScope()
 
-                // Handle system back to close the player sheet when visible
-                BackHandler(enabled = scaffoldState.bottomSheetState.currentValue != SheetValue.Hidden) {
-                    scope.launch { scaffoldState.bottomSheetState.hide() }
+                // Handle system back only when the player sheet is open (expanded)
+                BackHandler(enabled = scaffoldState.bottomSheetState.currentValue == SheetValue.Expanded || scaffoldState.bottomSheetState.targetValue == SheetValue.Expanded) {
+                    scope.launch { scaffoldState.bottomSheetState.partialExpand() }
                 }
 
                 BottomSheetScaffold(
                     modifier = Modifier.fillMaxSize(),
                     scaffoldState = scaffoldState,
                     sheetPeekHeight = 0.dp,
+                    sheetContainerColor = MaterialTheme.colorScheme.surface,
                     topBar = {
                         CenterAlignedTopAppBar(
                             title = {
@@ -79,11 +83,11 @@ class MainActivity : ComponentActivity() {
                     sheetContent = {
                         PlayerScreen(
                             viewModel = playerViewModel,
-                            modifier = Modifier.navigationBarsPadding(),
+                            modifier = Modifier.fillMaxWidth().navigationBarsPadding(),
                             onCloseRequested = {
                                 scope.launch {
-                                    // Prefer hiding to fully close the overlay. TODO: consider partialExpand if peek > 0
-                                    scaffoldState.bottomSheetState.hide()
+                                    // Use partialExpand: hide() is not allowed when skipHiddenState is enabled. With peek = 0.dp this is visually hidden.
+                                    scaffoldState.bottomSheetState.partialExpand()
                                 }
                             }
                         )
@@ -100,9 +104,15 @@ class MainActivity : ComponentActivity() {
                                 onOpenPlayer = { scope.launch { scaffoldState.bottomSheetState.expand() } }
                             )
                         }
+                        val currentLiveset by playerViewModel.currentLiveset.collectAsState()
                         if (isPlaying || nowTitle != null) {
+                            val artist = currentLiveset?.liveset?.artistName
+                            val editionNo = currentLiveset?.edition?.number
+                            val subtitle = listOfNotNull(artist, editionNo?.let { "TFW #$it" }).joinToString(" / ")
                             NowPlayingBar(
                                 title = nowTitle ?: "Playing",
+                                subtitle = subtitle.takeIf { it.isNotBlank() },
+                                isPlaying = isPlaying,
                                 progress = progress,
                                 onPlayPause = { playerViewModel.playPause() },
                                 onOpenPlayer = { scope.launch { scaffoldState.bottomSheetState.expand() } }
@@ -116,7 +126,14 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-private fun NowPlayingBar(title: String, progress: Float?, onPlayPause: () -> Unit, onOpenPlayer: () -> Unit) {
+private fun NowPlayingBar(
+    title: String,
+    subtitle: String?,
+    isPlaying: Boolean,
+    progress: Float?,
+    onPlayPause: () -> Unit,
+    onOpenPlayer: () -> Unit
+) {
     androidx.compose.material3.Surface(
         modifier = Modifier
             .navigationBarsPadding(),
@@ -140,8 +157,29 @@ private fun NowPlayingBar(title: String, progress: Float?, onPlayPause: () -> Un
                 verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
                 horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween
             ) {
-                androidx.compose.material3.Text(text = title, style = androidx.compose.material3.MaterialTheme.typography.bodyLarge)
-                IconButton(onClick = onPlayPause) { androidx.compose.material3.Text("⏯") }
+                androidx.compose.foundation.layout.Column(Modifier.weight(1f)) {
+                    androidx.compose.material3.Text(
+                        text = title,
+                        style = androidx.compose.material3.MaterialTheme.typography.bodyLarge,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                    )
+                    if (!subtitle.isNullOrBlank()) {
+                        androidx.compose.material3.Text(
+                            text = subtitle,
+                            style = androidx.compose.material3.MaterialTheme.typography.labelSmall,
+                            color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                        )
+                    }
+                }
+                IconButton(onClick = onPlayPause) {
+                    androidx.compose.material3.Icon(
+                        imageVector = if (isPlaying) androidx.compose.material.icons.Icons.Filled.Pause else androidx.compose.material.icons.Icons.Filled.PlayArrow,
+                        contentDescription = if (isPlaying) "Pause" else "Play"
+                    )
+                }
             }
         }
     }

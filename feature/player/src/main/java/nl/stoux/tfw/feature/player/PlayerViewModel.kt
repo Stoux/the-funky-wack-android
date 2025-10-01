@@ -50,6 +50,9 @@ class PlayerViewModel @Inject constructor(
     private val _progress = MutableStateFlow<Float?>(null)
     val progress: StateFlow<Float?> = _progress
 
+    private val _isBuffering = MutableStateFlow(false)
+    val isBuffering: StateFlow<Boolean> = _isBuffering
+
     private var progressJob: Job? = null
 
 
@@ -94,6 +97,7 @@ class PlayerViewModel @Inject constructor(
                         updateDurations()
                     }
                     override fun onPlaybackStateChanged(playbackState: Int) {
+                        _isBuffering.value = controller?.isPlaying == false && controller?.playWhenReady == true
                         updateDurations()
                     }
                     override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) {
@@ -105,6 +109,7 @@ class PlayerViewModel @Inject constructor(
                 _isPlaying.value = controller?.isPlaying == true || controller?.playWhenReady == true
                 _nowPlayingTitle.value = controller?.currentMediaItem?.mediaMetadata?.title?.toString()
                 _shuffleEnabled.value = controller?.shuffleModeEnabled ?: false
+                _isBuffering.value = controller?.isPlaying == false && controller?.playWhenReady == true
                 updateDurations()
                 startOrStopProgressLoop(_isPlaying.value)
             }, { runnable -> runnable.run() })

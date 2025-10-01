@@ -42,6 +42,9 @@ dependencies {
     // Material icons
     implementation("androidx.compose.material:material-icons-extended")
 
+    // Image loading for poster
+    implementation(libs.coil.compose)
+
     // Media3 controller (for PlayerViewModel)
     implementation(libs.media3.session)
 
