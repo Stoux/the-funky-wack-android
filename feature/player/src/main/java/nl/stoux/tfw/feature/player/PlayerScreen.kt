@@ -64,7 +64,11 @@ fun PlayerScreen(
     val canSkipNextTrack by viewModel.canSkipNextTrack.collectAsState()
     val isBuffering by viewModel.isBuffering.collectAsState()
 
-    Box(modifier = modifier) {
+    val boxPadding = 16.dp
+
+    Box(modifier = modifier
+        .background(MaterialTheme.colorScheme.surfaceVariant),
+    ) {
         // Background poster stretched full-screen
         val bgPosterUrl = liveset?.edition?.posterUrl
         if (!bgPosterUrl.isNullOrBlank()) {
@@ -74,25 +78,26 @@ fun PlayerScreen(
                 modifier = Modifier.matchParentSize(),
                 contentScale = ContentScale.Crop
             )
+
+            // Heavy gray/black overlay for readability
+            Box(modifier = Modifier
+                .matchParentSize()
+                .background(Color.Black.copy(alpha = 0.72f))) {}
         }
-        // Heavy gray/black overlay for readability
-        Box(modifier = Modifier
-            .matchParentSize()
-            .background(Color.Black.copy(alpha = 0.72f))) {}
 
         // Foreground content split: top header and bottom-aligned controls
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.SpaceBetween
+                .padding(vertical = boxPadding),
+//            verticalArrangement = Arrangement.Bottom
         ) {
             // Header: top-aligned title and tagline; keep spacer where poster used to be
             val editionNumberStr =
                 liveset?.edition?.number ?: "0" // TODO: Replace fallback when data guaranteed
             val taglineStr = liveset?.edition?.tagLine?.trim().orEmpty()
             Column(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = boxPadding),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
@@ -120,7 +125,7 @@ fun PlayerScreen(
 
             Spacer(Modifier.height(12.dp))
             // Track/Liveset/Artist block
-            Column(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.fillMaxWidth().padding(horizontal = boxPadding)) {
                 Text(
                     text = liveset?.liveset?.title ?: "",
                     style = MaterialTheme.typography.titleMedium,
@@ -136,7 +141,8 @@ fun PlayerScreen(
                 )
             }
 
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(boxPadding))
+
             // Waveform placeholder with scrubbing slider at the bottom
             Box(
                 modifier = Modifier
@@ -161,124 +167,129 @@ fun PlayerScreen(
                 )
             }
 
-            Spacer(Modifier.height(8.dp))
-            // Time row with current track in the middle
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+            Column(
+                modifier = Modifier.padding(horizontal = boxPadding)
             ) {
-                Text(
-                    text = formatTime(positionMs),
-                    style = MaterialTheme.typography.labelSmall,
-                    modifier = Modifier.weight(1f)
-                )
-                Text(
-                    text = currentTrack?.title ?: "",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.weight(3f).basicMarquee(
-                        iterations = Int.MAX_VALUE,
-                    )
-                )
-                Text(
-                    text = formatTime(durationMs),
-                    style = MaterialTheme.typography.labelSmall,
-                    textAlign = TextAlign.End,
-                    modifier = Modifier.weight(1f)
-                )
-            }
+                Spacer(Modifier.height(8.dp))
 
-            Spacer(Modifier.height(8.dp))
-            // Primary controls
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                IconButton(
-                    onClick = { viewModel.skipTrackBackward() },
-                    enabled = canSkipPrevTrack
+                // Time row with current track in the middle
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(
-                        imageVector = Icons.Filled.FastRewind,
-                        contentDescription = "Previous track in liveset"
+                    Text(
+                        text = formatTime(positionMs),
+                        style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier.weight(1f)
                     )
-                }
-                IconButton(onClick = { viewModel.previousLiveset() }) {
-                    Icon(
-                        imageVector = Icons.Filled.SkipPrevious,
-                        contentDescription = "Previous track"
-                    )
-                }
-                Button(
-                    onClick = { viewModel.playPause() },
-                    enabled = !isBuffering,
-                    modifier = Modifier
-                        .size(72.dp)
-                        .clip(CircleShape),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                ) {
-                    if (isBuffering) {
-                        androidx.compose.material3.CircularProgressIndicator(
-                            color = MaterialTheme.colorScheme.onPrimary,
-                            strokeWidth = 2.dp,
-                            modifier = Modifier.size(28.dp)
+                    Text(
+                        text = currentTrack?.title ?: "",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.weight(3f).basicMarquee(
+                            iterations = Int.MAX_VALUE,
                         )
-                    } else {
+                    )
+                    Text(
+                        text = formatTime(durationMs),
+                        style = MaterialTheme.typography.labelSmall,
+                        textAlign = TextAlign.End,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+
+                Spacer(Modifier.height(8.dp))
+                // Primary controls
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    IconButton(
+                        onClick = { viewModel.skipTrackBackward() },
+                        enabled = canSkipPrevTrack
+                    ) {
                         Icon(
-                            imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                            contentDescription = if (isPlaying) "Pause" else "Play",
-                            tint = MaterialTheme.colorScheme.onPrimary
+                            imageVector = Icons.Filled.FastRewind,
+                            contentDescription = "Previous track in liveset"
                         )
                     }
-                }
-                IconButton(onClick = { viewModel.nextLiveset() }) {
-                    Icon(imageVector = Icons.Filled.SkipNext, contentDescription = "Next track")
-                }
-                IconButton(onClick = { viewModel.skipTrackForward() }, enabled = canSkipNextTrack) {
-                    Icon(
-                        imageVector = Icons.Filled.FastForward,
-                        contentDescription = "Next track in liveset"
-                    )
-                }
-            }
-
-            Spacer(Modifier.height(8.dp))
-            // Secondary controls
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconToggleButton(
-                        checked = shuffleEnabled,
-                        onCheckedChange = { viewModel.toggleShuffle() }) {
+                    IconButton(onClick = { viewModel.previousLiveset() }) {
                         Icon(
-                            imageVector = Icons.Filled.Shuffle,
-                            contentDescription = if (shuffleEnabled) "Shuffle on" else "Shuffle off",
-                            tint = if (shuffleEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                            imageVector = Icons.Filled.SkipPrevious,
+                            contentDescription = "Previous track"
                         )
                     }
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (hasCast) {
-                        IconButton(onClick = { /* TODO: Implement cast */ }) {
-                            Icon(imageVector = Icons.Filled.Cast, contentDescription = "Cast")
+                    Button(
+                        onClick = { viewModel.playPause() },
+                        enabled = !isBuffering,
+                        modifier = Modifier
+                            .size(72.dp)
+                            .clip(CircleShape),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                    ) {
+                        if (isBuffering) {
+                            androidx.compose.material3.CircularProgressIndicator(
+                                color = MaterialTheme.colorScheme.onPrimary,
+                                strokeWidth = 2.dp,
+                                modifier = Modifier.size(28.dp)
+                            )
+                        } else {
+                            Icon(
+                                imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                                contentDescription = if (isPlaying) "Pause" else "Play",
+                                tint = MaterialTheme.colorScheme.onPrimary
+                            )
                         }
-                        Spacer(modifier = Modifier.size(4.dp))
                     }
-                    IconButton(onClick = { viewModel.openQueue() }) {
-                        Icon(imageVector = Icons.Filled.QueueMusic, contentDescription = "Queue")
+                    IconButton(onClick = { viewModel.nextLiveset() }) {
+                        Icon(imageVector = Icons.Filled.SkipNext, contentDescription = "Next track")
+                    }
+                    IconButton(onClick = { viewModel.skipTrackForward() }, enabled = canSkipNextTrack) {
+                        Icon(
+                            imageVector = Icons.Filled.FastForward,
+                            contentDescription = "Next track in liveset"
+                        )
                     }
                 }
-            }
-            Divider()
-            Spacer(Modifier.height(8.dp))
 
+                Spacer(Modifier.height(8.dp))
+                // Secondary controls
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconToggleButton(
+                            checked = shuffleEnabled,
+                            onCheckedChange = { viewModel.toggleShuffle() }) {
+                            Icon(
+                                imageVector = Icons.Filled.Shuffle,
+                                contentDescription = if (shuffleEnabled) "Shuffle on" else "Shuffle off",
+                                tint = if (shuffleEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (hasCast) {
+                            IconButton(onClick = { /* TODO: Implement cast */ }) {
+                                Icon(imageVector = Icons.Filled.Cast, contentDescription = "Cast")
+                            }
+                            Spacer(modifier = Modifier.size(4.dp))
+                        }
+                        IconButton(onClick = { viewModel.openQueue() }) {
+                            Icon(imageVector = Icons.Filled.QueueMusic, contentDescription = "Queue")
+                        }
+                    }
+                }
+                Divider()
+                Spacer(Modifier.height(8.dp))
+
+            }
         }
     }
 }

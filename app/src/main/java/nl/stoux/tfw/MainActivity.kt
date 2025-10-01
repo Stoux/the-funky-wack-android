@@ -6,8 +6,11 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -23,10 +26,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 import nl.stoux.tfw.feature.browser.EditionListScreen
@@ -134,22 +141,23 @@ private fun NowPlayingBar(
     onPlayPause: () -> Unit,
     onOpenPlayer: () -> Unit
 ) {
-    androidx.compose.material3.Surface(
+    Surface(
         modifier = Modifier
-            .navigationBarsPadding(),
-        color = androidx.compose.material3.MaterialTheme.colorScheme.surface
+            .navigationBarsPadding()
+            .background(Color.Black.copy(alpha = 0.72f)),
+        color = MaterialTheme.colorScheme.surface
     ) {
         androidx.compose.foundation.layout.Column(modifier = Modifier.fillMaxWidth()) {
             // Show progress only when known; otherwise no loading bar to avoid endless spinner
             val p = progress
             if (p != null) {
-                androidx.compose.material3.LinearProgressIndicator(
+                LinearProgressIndicator(
                     progress = { p.coerceIn(0f, 1f) },
                     modifier = Modifier.fillMaxWidth(),
-                    trackColor = androidx.compose.material3.MaterialTheme.colorScheme.surfaceVariant,
+                    trackColor = MaterialTheme.colorScheme.surfaceVariant,
                 )
             }
-            androidx.compose.foundation.layout.Row(
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 12.dp, vertical = 10.dp)
@@ -157,25 +165,25 @@ private fun NowPlayingBar(
                 verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
                 horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween
             ) {
-                androidx.compose.foundation.layout.Column(Modifier.weight(1f)) {
-                    androidx.compose.material3.Text(
+                Column(Modifier.weight(1f)) {
+                    Text(
                         text = title,
-                        style = androidx.compose.material3.MaterialTheme.typography.bodyLarge,
+                        style = MaterialTheme.typography.bodyLarge,
                         maxLines = 1,
                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                     )
                     if (!subtitle.isNullOrBlank()) {
-                        androidx.compose.material3.Text(
+                        Text(
                             text = subtitle,
-                            style = androidx.compose.material3.MaterialTheme.typography.labelSmall,
-                            color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
                             overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                         )
                     }
                 }
                 IconButton(onClick = onPlayPause) {
-                    androidx.compose.material3.Icon(
+                    Icon(
                         imageVector = if (isPlaying) androidx.compose.material.icons.Icons.Filled.Pause else androidx.compose.material.icons.Icons.Filled.PlayArrow,
                         contentDescription = if (isPlaying) "Pause" else "Play"
                     )
