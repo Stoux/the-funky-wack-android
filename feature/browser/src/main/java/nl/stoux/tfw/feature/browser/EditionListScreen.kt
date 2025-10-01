@@ -112,7 +112,14 @@ private fun EditionHeader(
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         // Left: text content
-        Column(Modifier.weight(1f)) {
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(
+                    start = 16.dp,
+                    end = if (posterUrl == null) 16.dp else 8.dp
+                )
+        ) {
             Row(verticalAlignment = Alignment.Bottom) {
                 Text(
                     text = "TFW #$number",
@@ -148,14 +155,16 @@ private fun EditionHeader(
             }
         }
         // Right: poster (Coil)
-        coil.compose.AsyncImage(
-            model = posterUrl,
-            contentDescription = "Edition poster",
-            modifier = Modifier
-                .height(96.dp)
-                .clip(androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
-                .fillMaxWidth(0.18f),
-        )
+        if (posterUrl != null) {
+            coil.compose.AsyncImage(
+                model = posterUrl,
+                contentDescription = "Edition poster",
+                modifier = Modifier
+                    .height(96.dp)
+                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
+                    .fillMaxWidth(0.18f),
+            )
+        }
     }
 }
 
