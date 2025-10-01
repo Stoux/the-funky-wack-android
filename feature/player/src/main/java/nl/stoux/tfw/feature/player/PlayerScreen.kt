@@ -78,7 +78,9 @@ fun PlayerScreen(
     val density = LocalDensity.current
     val boxPadding = 16.dp
 
-    val showTracks = playerControlsContainerHeight != null && (liveset?.tracks?.size ?: 0) > 0
+    val showTrackList = (liveset?.tracks?.size ?: 0) > 0
+    val showDescription = !liveset?.liveset?.description.isNullOrBlank()
+    val showDetails = playerControlsContainerHeight != null && (showTrackList || showDescription)
 
     // Reset the set container height when the player is closed
     LaunchedEffect(isOpen) {
@@ -138,7 +140,7 @@ fun PlayerScreen(
                 PlayerControls(
                     viewModel = viewModel,
                     boxPadding = boxPadding,
-                    showTracks = showTracks,
+                    showDetails = showDetails,
                     onScrollDown = {
                         uiScope.launch {
                             onGoFullScreen()
@@ -149,14 +151,30 @@ fun PlayerScreen(
 
             }
 
-            if (showTracks) {
-                val currentTrack by viewModel.currentTrack.collectAsState()
-                TrackList(
-                    tracks = liveset?.tracks ?: emptyList(),
-                    currentTrack = currentTrack,
-                    boxPadding = boxPadding,
-                    seekToTrack = { sec -> viewModel.seekTo(sec * 1000L) }
-                )
+            // Additional details that are shown below the fold, scroll down to view more
+            if (showDetails) {
+                // Description
+                if (showDescription) {
+                    LivesetDescription(
+                        description = liveset?.liveset?.description ?: "",
+                        boxPadding = boxPadding,
+                    )
+                }
+
+                if (showDescription && showTrackList) {
+                    Spacer(Modifier.height(24.dp))
+                }
+
+                // Tracklist
+                if (showTrackList) {
+                    val currentTrack by viewModel.currentTrack.collectAsState()
+                    TrackList(
+                        tracks = liveset?.tracks ?: emptyList(),
+                        currentTrack = currentTrack,
+                        boxPadding = boxPadding,
+                        seekToTrack = { sec -> viewModel.seekTo(sec * 1000L) }
+                    )
+                }
             }
 
 
@@ -202,7 +220,7 @@ fun BackgroundPoster(posterUrl: String?, modifier: Modifier) {
 fun PlayerControls(
     viewModel: PlayerViewModel,
     boxPadding: Dp,
-    showTracks: Boolean,
+    showDetails: Boolean,
     onScrollDown: () -> Unit,
 ) {
     val liveset by viewModel.currentLiveset.collectAsState()
@@ -428,17 +446,45 @@ fun PlayerControls(
                 IconButton(
                     onClick = onScrollDown,
                     modifier = Modifier
-                        .alpha(if (showTracks) 1f else 0f),
-                    enabled = showTracks
+                        .alpha(if (showDetails) 1f else 0f),
+                    enabled = showDetails
                 ) {
                     // TODO: Little bounce when it comes into view
-                    Icon(imageVector = Icons.Filled.KeyboardDoubleArrowDown, contentDescription = "View tracks")
+                    Icon(imageVector = Icons.Filled.KeyboardDoubleArrowDown, contentDescription = "View more details")
                 }
             }
 
             Spacer(Modifier.height(8.dp))
         }
     }
+}
+
+@Composable
+fun LivesetDescription(
+    description: String,
+    boxPadding: Dp,
+) {
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = boxPadding)
+    ) {
+
+        Text(
+            text = "Description",
+            style = MaterialTheme.typography.titleMedium,
+        )
+
+        Spacer(Modifier.height(4.dp))
+
+        Text(
+            text = description,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+
 }
 
 @Composable
