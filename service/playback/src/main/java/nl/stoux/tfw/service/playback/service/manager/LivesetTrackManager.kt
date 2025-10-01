@@ -50,12 +50,26 @@ class LivesetTrackManager @Inject constructor(
         listener: LivesetTrackListener,
         // TODO: Preferred refresh interval
     ): UnbindCallback {
+        val player = playerManager.currentPlayer()
+
         // Register the listener if we're the first to hook into this manager
         if (listenersUpdater.isEmpty()) {
-            playerManager.currentPlayer().addListener(this);
+            player.addListener(this);
         }
 
         listenersUpdater.addListener(listener)
+
+
+        // Instantly fire all events (by using a temporary updater with just that listener)
+        val updater = ListenersUpdater()
+        updater.addListener(listener)
+
+        val trackSection = currentTrackSection
+        updater.onLivesetChanged(liveset = currentLiveset)
+        if (trackSection != null) {
+            updater.onTrackChanged(trackSection)
+        }
+        updater.onTimeProgress(player.currentPosition, player.duration)
 
         return {
             listenersUpdater.removeListener(listener)
