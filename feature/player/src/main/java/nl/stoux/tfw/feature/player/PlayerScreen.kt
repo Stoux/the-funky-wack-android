@@ -61,6 +61,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import nl.stoux.tfw.core.common.database.entity.TrackEntity
 
 @Composable
 fun PlayerScreen(
@@ -149,16 +150,13 @@ fun PlayerScreen(
             }
 
             if (showTracks) {
-                // TODO: Implement properly
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = boxPadding)
-                ) {
-                    liveset?.tracks?.forEach { track ->
-                        Text(track.title)
-                    }
-                }
+                val currentTrack by viewModel.currentTrack.collectAsState()
+                TrackList(
+                    tracks = liveset?.tracks ?: emptyList(),
+                    currentTrack = currentTrack,
+                    boxPadding = boxPadding,
+                    seekToTrack = { sec -> viewModel.seekTo(sec * 1000L) }
+                )
             }
 
 
@@ -443,7 +441,71 @@ fun PlayerControls(
     }
 }
 
+@Composable
+fun TrackList(
+    tracks: List<TrackEntity>,
+    currentTrack: TrackEntity?,
+    boxPadding: Dp,
+    seekToTrack: (timestamp: Int) -> Unit = {},
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = boxPadding)
+    ) {
 
+        Text(
+            text = "Tracklist",
+            style = MaterialTheme.typography.titleMedium,
+        )
+
+        tracks.forEachIndexed { index, track ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                val timestampSeconds = track.timestampSec
+                val formattedTime = if (timestampSeconds == null) null else formatTime(timestampSeconds * 1000L)
+
+                Column(modifier = Modifier.weight(1f)) {
+                    val isCurrent = currentTrack?.id == track.id
+                    val metaColor = if (isCurrent) Color.Green /* TODO: Use theme */ else MaterialTheme.colorScheme.secondary
+
+                    val metaText = buildString {
+                        append("#${track.orderInSet}")
+                        if (formattedTime != null) {
+                            append(" - ")
+                            append(formattedTime)
+                        }
+                    }
+                    Text(
+                        text = metaText,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = metaColor,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = track.title,
+                        style = MaterialTheme.typography.bodyLarge,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+
+                // Right: play from timestamp button (icon only, no background)
+                if (timestampSeconds != null && formattedTime != null) {
+                    IconButton(onClick = { seekToTrack(timestampSeconds) }) {
+                        Icon(imageVector = Icons.Filled.PlayArrow, contentDescription = "Play from $formattedTime")
+                    }
+                }
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+    }
+}
 
 private fun formatTime(ms: Long): String {
     if (ms <= 0) return "0:00"

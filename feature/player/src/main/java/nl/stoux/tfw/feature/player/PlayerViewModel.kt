@@ -200,10 +200,7 @@ class PlayerViewModel @Inject constructor(
 
     fun seekTo(positionMs: Long) {
         controller?.seekTo(positionMs)
-        _positionMs.value = positionMs
-        if (_durationMs.value > 0) {
-            _progress.value = (positionMs.toFloat() / _durationMs.value.toFloat()).coerceIn(0f, 1f)
-        }
+        updateDurations()
     }
 
     fun seekToPercent(fraction: Float) {
