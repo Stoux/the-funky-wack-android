@@ -13,3 +13,7 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# Release folders
+/automotive/release/
+/app/release/

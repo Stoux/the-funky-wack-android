@@ -14,7 +14,9 @@ android {
         applicationId = "nl.stoux.tfw"
         minSdk = 30
         targetSdk = 36
-        versionCode = providers.gradleProperty("APP_VERSION_CODE").get().toInt()
+
+        val basePlatformCode = 1_000_000_000
+        versionCode = basePlatformCode + providers.gradleProperty("APP_VERSION_CODE").get().toInt()
         versionName = providers.gradleProperty("APP_VERSION_NAME").get()
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
