@@ -70,13 +70,13 @@ class MediaPlaybackService : MediaLibraryService() {
 
     fun buildCustomLayout(hasPreviousTrack: Boolean, hasNextTrack: Boolean): List<CommandButton> {
         // In a shared constants file or inside your service
-        val previousTrackButton = CommandButton.Builder(CommandButton.ICON_SKIP_BACK)
+        val previousTrackButton = CommandButton.Builder(CommandButton.ICON_REWIND)
             .setDisplayName("Skip to previous track")
             .setSessionCommand(commandPreviousTrack)
             .setEnabled(hasPreviousTrack)
             .build()
 
-        val nextTrackButton = CommandButton.Builder(CommandButton.ICON_SKIP_FORWARD)
+        val nextTrackButton = CommandButton.Builder(CommandButton.ICON_FAST_FORWARD)
             .setDisplayName("Skip to next track")
             .setSessionCommand(commandNextTrack)
             .setEnabled(hasNextTrack)
