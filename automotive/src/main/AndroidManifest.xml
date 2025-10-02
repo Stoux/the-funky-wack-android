@@ -18,6 +18,35 @@
         <meta-data android:name="com.android.automotive"
             android:resource="@xml/automotive_app_desc"/>
 
+        <meta-data
+            android:name="androidx.car.app.minCarApiLevel"
+            android:value="1" />
+
+        <!-- Activity from androidx.car that just launches the configured CarAppService (auto detects from AndroidManifest) -->
+        <activity
+            android:exported="true"
+            android:theme="@android:style/Theme.DeviceDefault.NoActionBar"
+            android:name="androidx.car.app.activity.CarAppActivity"
+            android:launchMode="singleTask"
+            android:label="The Funky Wack">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <meta-data android:name="distractionOptimized" android:value="true" />
+        </activity>
+
+        <!-- Actual service that builds the Automotive screens  -->
+        <service
+            android:name=".car.TfwCarAppService"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="androidx.car.app.CarAppService" />
+                <category android:name="androidx.car.app.category.MEDIA" />
+            </intent-filter>
+        </service>
+
     </application>
 
 </manifest>

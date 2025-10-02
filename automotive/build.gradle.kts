@@ -37,6 +37,7 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
     // For Android Automotive specific functionality
+    implementation(libs.androidx.car.app)
     implementation(libs.androidx.car.app.automotive)
 
     // Hilt DI for accessing shared repositories

@@ -222,6 +222,7 @@ class LibraryManager @Inject constructor(
                     .setArtist(artist)
                     .setTrackNumber(lwd.liveset.lineupOrder)
                     .setAlbumTitle("TFW #${lwd.edition.number}: ${lwd.edition.tagLine}")
+                    .setArtworkUri(lwd.edition.posterUrl?.toUri())
                     .setIsBrowsable(lwd.tracks.firstOrNull{ it.timestampSec != null } != null)
                     .setIsPlayable(playableUri != null)
                     .build()
