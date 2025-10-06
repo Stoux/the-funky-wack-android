@@ -98,6 +98,22 @@ class MediaPlaybackService : MediaLibraryService() {
         super.onDestroy()
     }
 
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        // The user has swiped the app away; stop playback and release resources.
+        trackManagerUnbindCallback?.invoke()
+        trackManagerUnbindCallback = null
+        mediaLibrarySession?.release()
+        mediaLibrarySession = null
+        playerManager.release()
+
+        // Stop this service instance
+        stopSelf()
+        super.onTaskRemoved(rootIntent)
+
+        // We've killed this service. Make sure if the user starts the app up again, we start fresh.
+        exitProcess(0)
+    }
+
     private inner class SessionCallback : MediaLibrarySession.Callback {
 
         override fun onConnect(
