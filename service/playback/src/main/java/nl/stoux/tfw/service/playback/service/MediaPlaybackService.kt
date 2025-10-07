@@ -26,7 +26,8 @@ import nl.stoux.tfw.service.playback.service.session.LibraryManager
 import nl.stoux.tfw.service.playback.service.manager.LivesetTrackManager
 import nl.stoux.tfw.service.playback.service.manager.UnbindCallback
 import android.content.Intent
-import kotlin.system.exitProcess
+import kotlinx.coroutines.runBlocking
+import nl.stoux.tfw.service.playback.service.resume.PlaybackResumeCoordinator
 
 @AndroidEntryPoint
 class MediaPlaybackService : MediaLibraryService() {
@@ -39,7 +40,7 @@ class MediaPlaybackService : MediaLibraryService() {
 
     @Inject lateinit var trackManager: LivesetTrackManager
 
-    @Inject lateinit var resumeCoordinator: nl.stoux.tfw.service.playback.service.resume.PlaybackResumeCoordinator
+    @Inject lateinit var resumeCoordinator: PlaybackResumeCoordinator
 
     private var mediaLibrarySession: MediaLibrarySession? = null
 
@@ -101,28 +102,27 @@ class MediaPlaybackService : MediaLibraryService() {
         trackManagerUnbindCallback = null
         mediaLibrarySession?.release()
         mediaLibrarySession = null
+
         // Detach coordinator before releasing player
-        runCatching { resumeCoordinator.detach(playerManager.currentPlayer()) }
-        playerManager.release()
+        serviceIOScope.launch {
+            runBlocking { resumeCoordinator.detach(playerManager.currentPlayer()) }
+            serviceMainScope.launch {
+                playerManager.release()
+            }
+        }
+
         super.onDestroy()
     }
 
+    /**
+     * Method called when this service should be killed/stopped/removed.
+     * Most important scenario is: swiping this app away from the recent apps should kill the media service.
+     */
     override fun onTaskRemoved(rootIntent: Intent?) {
-        // The user has swiped the app away; stop playback and release resources.
-        trackManagerUnbindCallback?.invoke()
-        trackManagerUnbindCallback = null
-        mediaLibrarySession?.release()
-        mediaLibrarySession = null
-        // Detach coordinator before releasing player
-        runCatching { resumeCoordinator.detach(playerManager.currentPlayer()) }
-        playerManager.release()
-
-        // Stop this service instance
+        // Start a full cleanup (should call onDestroy eventually)
+        Log.d("MediaPlaybackService", "calling stopSelf()")
         stopSelf()
         super.onTaskRemoved(rootIntent)
-
-        // We've killed this service. Make sure if the user starts the app up again, we start fresh.
-        exitProcess(0)
     }
 
     private inner class SessionCallback : MediaLibrarySession.Callback {

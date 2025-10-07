@@ -6,6 +6,7 @@ import kotlinx.coroutines.flow.Flow
  * Repository for persisting and retrieving last playback state.
  */
 interface PlaybackStateRepository {
+
     data class State(
         val mediaId: String,
         val positionMs: Long,
@@ -13,5 +14,5 @@ interface PlaybackStateRepository {
 
     fun lastState(): Flow<State?>
 
-    suspend fun saveState(mediaId: String, positionMs: Long)
+    suspend fun saveState(state: State)
 }

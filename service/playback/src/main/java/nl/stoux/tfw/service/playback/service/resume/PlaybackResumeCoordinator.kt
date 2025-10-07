@@ -14,9 +14,9 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Keeps MediaPlaybackService slim by handling resume/persist logic.
- * - Saves last played mediaId + position when playback stops/pauses (IO)
- * - Restores the last played item on service start (prepare on Main, data on IO)
+ * Coordinator that manages the last playing state of the service.
+ * - Saves last played mediaId + position when playback stops/pauses
+ * - Restores the last played item on service start
  */
 @Singleton
 class PlaybackResumeCoordinator @Inject constructor(
@@ -34,34 +34,50 @@ class PlaybackResumeCoordinator @Inject constructor(
             tryRestore(player)
         }
 
-        // Save state on pause/stop
-        val l = object : Player.Listener {
+        // Build a listener for this specific player
+        val listenerForPlayer = object : Player.Listener {
+            // Save state on pause/stop
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 if (!isPlaying) {
                     scope.launch {
-                        // Read from player on Main thread
-                        val (mediaId, position) = withContext(Dispatchers.Main) {
-                            val current: MediaItem? = player.currentMediaItem
-                            val id = current?.mediaId
-                            val pos = player.currentPosition
-                            id to pos
-                        }
-                        if (!mediaId.isNullOrEmpty()) {
-                            // Persist on IO
-                            playbackStateRepository.saveState(mediaId = mediaId, positionMs = position)
-                            Log.d("PlaybackResume", "Saved state: ${'$'}mediaId@${'$'}position")
-                        }
+                        resolvePlayerStateAndStore(player)
                     }
                 }
             }
         }
-        listener = l
-        player.addListener(l)
+
+        // Store & attach it so we can unbind later
+        listener = listenerForPlayer
+        player.addListener(listenerForPlayer)
     }
 
-    fun detach(player: Player) {
-        listener?.let { player.removeListener(it) }
-        listener = null
+    suspend fun resolvePlayerStateAndStore(player: Player) {
+        val state = withContext(Dispatchers.Main.immediate) {
+            val current: MediaItem? = player.currentMediaItem
+            val id = current?.mediaId
+            val pos = player.currentPosition
+            if (id == null) null else {
+                PlaybackStateRepository.State(id, pos)
+            }
+        }
+        if (state != null) {
+            // Persist on IO
+            playbackStateRepository.saveState(state)
+            Log.d("PlaybackResume", "Saved state: ${state.mediaId}@${state.positionMs}")
+        }
+    }
+
+    suspend fun detach(player: Player) {
+        // Detach our player
+        withContext(Dispatchers.Main) {
+            listener?.let { player.removeListener(it) }
+            listener = null
+        }
+
+        // Save the state one last time
+        withContext(Dispatchers.IO) {
+            resolvePlayerStateAndStore(player)
+        }
     }
 
     private suspend fun tryRestore(player: Player) {
@@ -71,9 +87,9 @@ class PlaybackResumeCoordinator @Inject constructor(
 
         try {
             // Parse the last media ID & make sure it's a (valid) liveset ID
-            val cmid = CustomMediaId.from(last.mediaId)
+            val mediaId = CustomMediaId.from(last.mediaId)
             val item: MediaItem? = when {
-                cmid.isLiveset() -> libraryManager.livesetMediaItem(cmid.getLivesetId()!!)
+                mediaId.isLiveset() -> libraryManager.livesetMediaItem(mediaId.getLivesetId()!!)
                 else -> return
             }
 
@@ -82,10 +98,17 @@ class PlaybackResumeCoordinator @Inject constructor(
 
             // Prepare player to the last item and seek; do NOT autoplay
             withContext(Dispatchers.Main) {
+                // Don't play it if something else ready was found (i.e. direct link)
+                if (player.currentMediaItem != null) {
+                    return@withContext
+                }
+
+                // Load that media item & prepare the loader (but don't start it)
                 player.setMediaItem(item, last.positionMs)
                 player.prepare()
+
+                Log.d("PlaybackResume", "Restored state: ${last.mediaId}@${last.positionMs}}")
             }
-            Log.d("PlaybackResume", "Restored state: ${'$'}{last.mediaId}@${'$'}{last.positionMs}")
         } catch (t: Throwable) {
             Log.e("PlaybackResume", "Failed to restore state", t)
         }
