@@ -1,5 +1,8 @@
 package nl.stoux.tfw.feature.player
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.keyframes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.layout.Arrangement
@@ -7,9 +10,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -468,13 +471,32 @@ fun PlayerControls(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Divider(modifier = Modifier.padding(vertical = 8.dp))
+
+                // Make the button bounce up & down a little bit when it comes into view
+                val buttonBounceOffset = remember { Animatable(0f) }
+                LaunchedEffect(showDetails) {
+                    if (!showDetails) return@LaunchedEffect
+
+                    repeat(3) {
+                        buttonBounceOffset.animateTo(
+                            targetValue = 0f,
+                            animationSpec = keyframes {
+                                durationMillis = 900
+                                6f at 450 using LinearEasing
+                                0f at 900 using LinearEasing
+                            }
+                        )
+                    }
+
+                }
+
                 IconButton(
                     onClick = onScrollDown,
                     modifier = Modifier
-                        .alpha(if (showDetails) 1f else 0f),
+                        .alpha(if (showDetails) 1f else 0f)
+                        .offset(y = buttonBounceOffset.value.dp),
                     enabled = showDetails
                 ) {
-                    // TODO: Little bounce when it comes into view
                     Icon(
                         imageVector = Icons.Filled.KeyboardDoubleArrowDown,
                         contentDescription = "View more details"
