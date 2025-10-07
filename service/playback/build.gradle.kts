@@ -47,6 +47,9 @@ dependencies {
     // Coroutines (for repository access in callbacks)
     implementation(libs.coroutines.android)
 
+    // DataStore for persisting playback state
+    implementation(libs.androidx.datastore.preferences)
+
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

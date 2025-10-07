@@ -25,6 +25,8 @@ import nl.stoux.tfw.service.playback.service.session.CustomMediaId
 import nl.stoux.tfw.service.playback.service.session.LibraryManager
 import nl.stoux.tfw.service.playback.service.manager.LivesetTrackManager
 import nl.stoux.tfw.service.playback.service.manager.UnbindCallback
+import android.content.Intent
+import kotlin.system.exitProcess
 
 @AndroidEntryPoint
 class MediaPlaybackService : MediaLibraryService() {
@@ -36,6 +38,8 @@ class MediaPlaybackService : MediaLibraryService() {
     @Inject lateinit var libraryManager: LibraryManager
 
     @Inject lateinit var trackManager: LivesetTrackManager
+
+    @Inject lateinit var resumeCoordinator: nl.stoux.tfw.service.playback.service.resume.PlaybackResumeCoordinator
 
     private var mediaLibrarySession: MediaLibrarySession? = null
 
@@ -55,6 +59,9 @@ class MediaPlaybackService : MediaLibraryService() {
             .setId("tfw-media-session")
             .setCustomLayout(buildCustomLayout(false, false))
             .build()
+
+        // Attach resume/persist coordinator (restores last state and starts listening)
+        resumeCoordinator.attach(player)
 
         // Add listener
         trackManagerUnbindCallback = trackManager.bind(TrackListener())
@@ -94,6 +101,8 @@ class MediaPlaybackService : MediaLibraryService() {
         trackManagerUnbindCallback = null
         mediaLibrarySession?.release()
         mediaLibrarySession = null
+        // Detach coordinator before releasing player
+        runCatching { resumeCoordinator.detach(playerManager.currentPlayer()) }
         playerManager.release()
         super.onDestroy()
     }
@@ -104,6 +113,8 @@ class MediaPlaybackService : MediaLibraryService() {
         trackManagerUnbindCallback = null
         mediaLibrarySession?.release()
         mediaLibrarySession = null
+        // Detach coordinator before releasing player
+        runCatching { resumeCoordinator.detach(playerManager.currentPlayer()) }
         playerManager.release()
 
         // Stop this service instance
