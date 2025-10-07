@@ -26,6 +26,7 @@ import nl.stoux.tfw.service.playback.service.session.LibraryManager
 import nl.stoux.tfw.service.playback.service.manager.LivesetTrackManager
 import nl.stoux.tfw.service.playback.service.manager.UnbindCallback
 import android.content.Intent
+import android.app.PendingIntent
 import kotlinx.coroutines.runBlocking
 import nl.stoux.tfw.service.playback.service.resume.PlaybackResumeCoordinator
 
@@ -55,11 +56,27 @@ class MediaPlaybackService : MediaLibraryService() {
         Log.d("MediaPlaybackService", "onCreate()")
         val player = playerManager.currentPlayer()
 
+        // Prepare session activity PendingIntent to open the app and show the player
+        val baseIntent = packageManager?.getLaunchIntentForPackage(packageName)
+        val sessionActivityIntent = baseIntent?.let {
+            Intent(it).apply {
+                action = ACTION_SHOW_PLAYER
+                // Ensure the existing activity is reused if running
+                addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            }
+        }
+        val sessionActivityPendingIntent = sessionActivityIntent?.let {
+            PendingIntent.getActivity(this, 0, it, PendingIntent.FLAG_IMMUTABLE)
+        }
+
         // Build the session
-        mediaLibrarySession = MediaLibrarySession.Builder(this, player, SessionCallback())
+        val sessionBuilder = MediaLibrarySession.Builder(this, player, SessionCallback())
             .setId("tfw-media-session")
             .setCustomLayout(buildCustomLayout(false, false))
-            .build()
+        if (sessionActivityPendingIntent != null) {
+            sessionBuilder.setSessionActivity(sessionActivityPendingIntent)
+        }
+        mediaLibrarySession = sessionBuilder.build()
 
         // Attach resume/persist coordinator (restores last state and starts listening)
         resumeCoordinator.attach(player)
@@ -259,6 +276,7 @@ class MediaPlaybackService : MediaLibraryService() {
     }
 
     companion object {
+        const val ACTION_SHOW_PLAYER = "nl.stoux.tfw.SHOW_PLAYER"
         val commandPreviousTrack = SessionCommand("track::previous", Bundle.EMPTY)
         val commandNextTrack = SessionCommand("track::next", Bundle.EMPTY)
     }

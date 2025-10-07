@@ -48,6 +48,7 @@ import nl.stoux.tfw.feature.player.PlayerScreen
 import nl.stoux.tfw.feature.player.PlayerViewModel
 import nl.stoux.tfw.ui.theme.TheFunkyWackTheme
 import androidx.compose.ui.unit.dp
+import nl.stoux.tfw.service.playback.service.MediaPlaybackService
 
 @AndroidEntryPoint
 @OptIn(ExperimentalMaterial3Api::class)
@@ -55,8 +56,17 @@ class MainActivity : ComponentActivity() {
     private val listViewModel: EditionListViewModel by viewModels()
     private val playerViewModel: PlayerViewModel by viewModels()
 
+    // Signal from Activity lifecycle (e.g., notification tap) to Compose to open the player
+    private val showPlayerRequest = mutableStateOf(false)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // If launched with action to show player, request it
+        if (intent?.action == MediaPlaybackService.ACTION_SHOW_PLAYER) {
+            showPlayerRequest.value = true
+        }
+
         enableEdgeToEdge()
         setContent {
             TheFunkyWackTheme {
@@ -68,6 +78,14 @@ class MainActivity : ComponentActivity() {
                 val playerIsOpen = scaffoldState.bottomSheetState.currentValue == SheetValue.Expanded || scaffoldState.bottomSheetState.targetValue == SheetValue.Expanded
                 var playerIsFullScreen by remember { mutableStateOf(false) }
                 val scope = rememberCoroutineScope()
+
+                // React to external request to open player (e.g., notification tap)
+                LaunchedEffect(showPlayerRequest.value) {
+                    if (showPlayerRequest.value) {
+                        scope.launch { scaffoldState.bottomSheetState.expand() }
+                        showPlayerRequest.value = false
+                    }
+                }
 
                 // Always restore the player to normal size when closed
                 LaunchedEffect(playerIsOpen) {
@@ -158,6 +176,14 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
+        }
+    }
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        if (intent.action == MediaPlaybackService.ACTION_SHOW_PLAYER) {
+            showPlayerRequest.value = true
         }
     }
 }
