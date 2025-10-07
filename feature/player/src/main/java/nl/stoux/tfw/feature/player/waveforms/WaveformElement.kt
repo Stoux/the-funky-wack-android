@@ -12,6 +12,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
@@ -19,11 +20,15 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
+import kotlinx.coroutines.launch
 import kotlin.math.ceil
 import kotlin.math.floor
 import kotlin.math.max
@@ -159,16 +164,64 @@ private fun Waveform(
     val endBarIndexExclusive = (startBarIndex + barsFit).coerceAtMost(fullBars.size)
     val visibleBars = if (startBarIndex < endBarIndexExclusive) fullBars.subList(startBarIndex, endBarIndexExclusive) else emptyList()
 
+    // Helper to compute progress from a local X coordinate using the current bars grid
+    fun computeProgressFromX(
+        x: Float,
+        canvasWidth: Float,
+        startBarIndex: Int,
+        barsFit: Int,
+        samplesPerBar: Int,
+        totalSamples: Int,
+    ): Float {
+        if (canvasWidth <= 0f || totalSamples <= 0 || barsFit <= 0 || samplesPerBar <= 0) return 0f
+        val localFrac = (x / canvasWidth).coerceIn(0f, 1f)
+        val barFloat = startBarIndex + localFrac * barsFit.toFloat()
+        val approxSample = barFloat * samplesPerBar
+        return (approxSample / totalSamples.toFloat()).coerceIn(0f, 1f)
+    }
+
     Canvas(
         modifier = modifier
+            // One-finger press and drag to seek continuously
+            .pointerInput(totalSamples, samplesPerBar, startBarIndex, barsFit) {
+                detectDragGesturesAfterLongPress(
+                    onDragStart = { offset ->
+                        val newProgress = computeProgressFromX(
+                            x = offset.x,
+                            canvasWidth = size.width.toFloat(),
+                            startBarIndex = startBarIndex,
+                            barsFit = barsFit,
+                            samplesPerBar = samplesPerBar,
+                            totalSamples = totalSamples
+                        )
+                        onProgressChange(newProgress)
+                    },
+                    onDrag = { change, _ ->
+                        val newProgress = computeProgressFromX(
+                            x = change.position.x,
+                            canvasWidth = size.width.toFloat(),
+                            startBarIndex = startBarIndex,
+                            barsFit = barsFit,
+                            samplesPerBar = samplesPerBar,
+                            totalSamples = totalSamples
+                        )
+                        onProgressChange(newProgress)
+                        change.consume()
+                    }
+                )
+            }
+            // Tap to seek with ripple feedback
             .pointerInput(totalSamples, samplesPerBar, startBarIndex, barsFit) {
                 detectTapGestures(
                     onTap = { offset ->
-                        // Map local X -> global progress using the bars grid for stability
-                        val localFrac = (offset.x / size.width).coerceIn(0f, 1f)
-                        val tappedBar = startBarIndex + localFrac * barsFit.toFloat()
-                        val approxSample = tappedBar * samplesPerBar
-                        val newProgress = if (totalSamples > 0) (approxSample / totalSamples.toFloat()).coerceIn(0f, 1f) else 0f
+                        val newProgress = computeProgressFromX(
+                            x = offset.x,
+                            canvasWidth = size.width.toFloat(),
+                            startBarIndex = startBarIndex,
+                            barsFit = barsFit,
+                            samplesPerBar = samplesPerBar,
+                            totalSamples = totalSamples
+                        )
                         onProgressChange(newProgress)
                     }
                 )
@@ -216,5 +269,6 @@ private fun Waveform(
                 cornerRadius = CornerRadius(2.dp.toPx())
             )
         }
+
     }
 }
