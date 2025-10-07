@@ -9,6 +9,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.android.scopes.ServiceScoped
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import nl.stoux.tfw.service.playback.di.PlayerFactory
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -23,6 +24,7 @@ class PlayerManager @Inject constructor(
 ) {
 
     private val _activePlayer = MutableStateFlow<Player?>(null)
+    val activePlayer = _activePlayer.asStateFlow()
 
     @OptIn(UnstableApi::class)
     @Synchronized

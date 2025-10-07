@@ -1,5 +1,7 @@
 package nl.stoux.tfw.service.playback.service.manager
 
+import android.util.Log
+import androidx.core.os.bundleOf
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import kotlinx.coroutines.CoroutineScope
@@ -41,6 +43,26 @@ class LivesetTrackManager @Inject constructor(
         updateTrackInformation()
     }
 
+    private var boundPlayer: Player? = playerManager.activePlayer.value
+
+    init {
+        serviceMainScope.launch {
+            // Listen to changes to the activePlayer
+            playerManager.activePlayer.collect { newPlayer ->
+                // We don't need to rebind if we're currently not bound either
+                val oldPlayer = boundPlayer ?: return@collect
+
+                // Unbind the old player
+                oldPlayer.removeListener(this@LivesetTrackManager)
+                boundPlayer = null
+
+                // Bind to the new player (if set)
+                newPlayer?.addListener(this@LivesetTrackManager)
+            }
+        }
+    }
+
+
     /**
      * Bind the track manager to the current player & service
      *
@@ -50,15 +72,14 @@ class LivesetTrackManager @Inject constructor(
         listener: LivesetTrackListener,
         // TODO: Preferred refresh interval
     ): UnbindCallback {
-        val player = playerManager.currentPlayer()
+        boundPlayer = playerManager.currentPlayer()
 
         // Register the listener if we're the first to hook into this manager
         if (listenersUpdater.isEmpty()) {
-            player.addListener(this);
+            boundPlayer?.addListener(this);
         }
 
         listenersUpdater.addListener(listener)
-
 
         // Instantly fire all events (by using a temporary updater with just that listener)
         val updater = ListenersUpdater()
@@ -69,7 +90,9 @@ class LivesetTrackManager @Inject constructor(
         if (trackSection != null) {
             updater.onTrackChanged(trackSection)
         }
-        updater.onTimeProgress(player.currentPosition, player.duration)
+        boundPlayer?.let { controller ->
+            updater.onTimeProgress(controller.currentPosition, controller.duration)
+        }
 
         return {
             listenersUpdater.removeListener(listener)
@@ -81,20 +104,22 @@ class LivesetTrackManager @Inject constructor(
         // Unregister the listener if there are no more callbacks to update
         if (listenersUpdater.isEmpty()) {
             progressReporter.stop()
-            playerManager.currentPlayer().removeListener(this);
+            boundPlayer?.removeListener(this)
+            boundPlayer?.release()
+            boundPlayer = null
         }
     }
 
     fun toPreviousTrack() {
         val previousTrack = currentTrackSection?.prev
         if (previousTrack == null) return
-        playerManager.currentPlayer().seekTo(previousTrack.startAt)
+        boundPlayer?.seekTo(previousTrack.startAt)
     }
 
     fun toNextTrack() {
         val nextTrack = currentTrackSection?.next
         if (nextTrack == null) return
-        playerManager.currentPlayer().seekTo(nextTrack.startAt)
+        boundPlayer?.seekTo(nextTrack.startAt)
     }
 
     override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
@@ -175,8 +200,8 @@ class LivesetTrackManager @Inject constructor(
         }
 
         // Resolve the current position
-        val position = playerManager.currentPlayer().currentPosition
-        val playingSection = currentTrackSection.findPlayingSection(position);
+        val position = boundPlayer?.currentPosition
+        val playingSection = if (position == null) null else currentTrackSection.findPlayingSection(position)
         if (playingSection == currentTrackSection) {
             // We're already showing the correct item
             return;
@@ -192,21 +217,21 @@ class LivesetTrackManager @Inject constructor(
         listenersUpdater.onTrackChanged(playingSection)
         if (currentTrackSection.track?.id == playingSection.track?.id) {
             // Same track somehow. No need to update the player. Might be a different next/prev?
-            return;
+            return
         }
 
         // Sanity checks: we need liveset info
         val liveset = currentLiveset
         if (liveset == null) {
-            return;
+            return
         }
 
         // Update the media player!
         // TODO: Make this an option
-        val player = playerManager.currentPlayer()
-        val mediaItem = player.currentMediaItem;
+        val player = boundPlayer
+        val mediaItem = player?.currentMediaItem;
         if (mediaItem == null) {
-            return;
+            return
         }
 
         // Default title should just be like the normal media item
@@ -245,7 +270,9 @@ class LivesetTrackManager @Inject constructor(
             // Start the job
             job = scope.launch {
                 while(true) {
-                    report(playerManager.currentPlayer().currentPosition);
+                    boundPlayer?.let { controller ->
+                        report(controller.currentPosition)
+                    }
                     delay(1000)
                 }
             }

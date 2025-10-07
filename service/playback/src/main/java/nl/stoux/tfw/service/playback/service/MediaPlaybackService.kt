@@ -1,34 +1,34 @@
 package nl.stoux.tfw.service.playback.service
 
-import androidx.media3.common.MediaItem
+import android.app.PendingIntent
+import android.content.Intent
 import android.os.Bundle
 import android.util.Log
 import androidx.annotation.OptIn
+import androidx.media3.common.MediaItem
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.session.CommandButton
 import androidx.media3.session.LibraryResult
 import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaSession
+import androidx.media3.session.SessionCommand
+import androidx.media3.session.SessionResult
 import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import javax.inject.Inject
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import nl.stoux.tfw.service.playback.player.PlayerManager
-import androidx.media3.common.util.UnstableApi
-import androidx.media3.session.CommandButton
-import androidx.media3.session.SessionCommand
-import androidx.media3.session.SessionResult
 import nl.stoux.tfw.service.playback.service.manager.LivesetTrackListener
-import nl.stoux.tfw.service.playback.service.session.CustomMediaId
-import nl.stoux.tfw.service.playback.service.session.LibraryManager
 import nl.stoux.tfw.service.playback.service.manager.LivesetTrackManager
 import nl.stoux.tfw.service.playback.service.manager.UnbindCallback
-import android.content.Intent
-import android.app.PendingIntent
-import kotlinx.coroutines.runBlocking
 import nl.stoux.tfw.service.playback.service.resume.PlaybackResumeCoordinator
+import nl.stoux.tfw.service.playback.service.session.CustomMediaId
+import nl.stoux.tfw.service.playback.service.session.LibraryManager
+import javax.inject.Inject
 
 @AndroidEntryPoint
 class MediaPlaybackService : MediaLibraryService() {
@@ -215,33 +215,22 @@ class MediaPlaybackService : MediaLibraryService() {
             controller: MediaSession.ControllerInfo,
             mediaItems: MutableList<MediaItem>
         ): ListenableFuture<List<MediaItem>> {
-
-            // Check if it was a track action
+            // Check if it was a track action encoded in the mediaId (legacy behavior: id@seconds)
             val firstItem = mediaItems.firstOrNull()
-            if (firstItem?.mediaId?.contains("@") ?: false) {
-                Log.d("Action", "We should skip to timestamp! ${firstItem.mediaId}")
-
+            if (firstItem?.mediaId?.contains("@") == true) {
                 val player = playerManager.currentPlayer()
                 val seekTo = firstItem.mediaId.substringAfter("@").toLongOrNull()
-
-                player.seekTo((seekTo ?: 10 ) * 1000)
-
-                val mediaItem = player.currentMediaItem
-                if (mediaItem != null) {
-                    val meta = mediaItem.mediaMetadata.buildUpon()
-                        .setTitle("New track baby")
-                        .build()
-                    player.replaceMediaItem(player.currentMediaItemIndex, mediaItem.buildUpon().setMediaMetadata(meta).build())
+                if (seekTo != null) {
+                    player.seekTo(seekTo * 1000)
                 }
 
-
                 // Return the player's CURRENT playlist to avoid any changes.
-                return Futures.immediateFuture(null)
+                return Futures.immediateCancelledFuture()
             }
 
             // Resolve the played item to a queue
             val items: List<MediaItem> = when {
-                mediaItems.size >= 1 -> {
+                mediaItems.isNotEmpty() -> {
                     if (mediaItems.size > 1) {
                         Log.e("MediaPlaybackService", "Playback service received multiple Media items to play? Unsupported! IDs: ${mediaItems.joinToString { it.mediaId }}")
                     }
