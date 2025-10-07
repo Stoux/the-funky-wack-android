@@ -19,6 +19,7 @@ import com.google.common.util.concurrent.ListenableFuture
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import nl.stoux.tfw.service.playback.player.PlayerManager
@@ -29,6 +30,7 @@ import nl.stoux.tfw.service.playback.service.resume.PlaybackResumeCoordinator
 import nl.stoux.tfw.service.playback.service.session.CustomMediaId
 import nl.stoux.tfw.service.playback.service.session.LibraryManager
 import javax.inject.Inject
+
 
 @AndroidEntryPoint
 class MediaPlaybackService : MediaLibraryService() {
@@ -91,6 +93,15 @@ class MediaPlaybackService : MediaLibraryService() {
                 mediaLibrarySession?.notifyChildrenChanged("root", 2, null)
             }
         }
+
+        // Change the underlying player if we switch (i.e. when casting).
+        serviceMainScope.launch {
+            playerManager.activePlayer.collect { activePlayer ->
+                if (activePlayer != null) {
+                    mediaLibrarySession?.player = activePlayer
+                }
+            }
+        }
     }
 
     fun buildCustomLayout(hasPreviousTrack: Boolean, hasNextTrack: Boolean): List<CommandButton> {
@@ -125,6 +136,9 @@ class MediaPlaybackService : MediaLibraryService() {
             runBlocking { resumeCoordinator.detach(playerManager.currentPlayer()) }
             serviceMainScope.launch {
                 playerManager.release()
+
+                serviceIOScope.cancel()
+                serviceMainScope.cancel()
             }
         }
 
