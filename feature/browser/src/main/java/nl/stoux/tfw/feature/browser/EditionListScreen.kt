@@ -32,6 +32,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import nl.stoux.tfw.core.common.database.dao.EditionWithContent
+import nl.stoux.tfw.core.common.database.entity.artworkUrl
 import nl.stoux.tfw.service.playback.service.session.CustomMediaId
 
 @Composable
@@ -71,7 +72,7 @@ private fun EditionList(
                         tagLine = edition.edition.tagLine,
                         date = edition.edition.date,
                         notes = edition.edition.notes,
-                        posterUrl = edition.edition.posterUrl,
+                        posterUrl = edition.edition.artworkUrl,
                     )
                     Divider(color = MaterialTheme.colorScheme.surfaceVariant)
                 }

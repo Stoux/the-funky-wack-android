@@ -10,6 +10,7 @@ import kotlinx.coroutines.runBlocking
 import nl.stoux.tfw.core.common.database.dao.EditionWithContent
 import nl.stoux.tfw.core.common.database.dao.LivesetWithDetails
 import nl.stoux.tfw.core.common.repository.EditionRepository
+import nl.stoux.tfw.core.common.database.entity.artworkUrl
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -85,7 +86,7 @@ class LibraryManager @Inject constructor(
                     MediaMetadata.Builder()
                         .setTitle("TFW #${ed.edition.number}: ${ed.edition.tagLine}")
                         .setArtist("${ed.edition.date} - ${ed.livesets.size} liveset${if (ed.livesets.size == 1)  "" else "s"}")
-                        .setArtworkUri(ed.edition.posterUrl?.toUri())
+                        .setArtworkUri(ed.edition.artworkUrl?.toUri())
                         .setIsBrowsable(true)
                         .setIsPlayable(false)
                         .build()
@@ -235,7 +236,7 @@ class LibraryManager @Inject constructor(
                     .setArtist(artist)
                     .setTrackNumber(lwd.liveset.lineupOrder)
                     .setAlbumTitle("TFW #${lwd.edition.number}: ${lwd.edition.tagLine}")
-                    .setArtworkUri(lwd.edition.posterUrl?.toUri())
+                    .setArtworkUri(lwd.edition.artworkUrl?.toUri())
                     .setIsBrowsable(lwd.tracks.firstOrNull{ it.timestampSec != null } != null)
                     .setIsPlayable(playableUrl != null)
                     .build()

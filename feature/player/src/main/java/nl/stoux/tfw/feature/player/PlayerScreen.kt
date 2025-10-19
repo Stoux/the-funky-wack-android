@@ -69,6 +69,7 @@ import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import nl.stoux.tfw.core.common.database.entity.TrackEntity
+import nl.stoux.tfw.core.common.database.entity.artworkUrl
 import nl.stoux.tfw.feature.player.waveforms.ZoomableWaveform
 
 @Composable
@@ -145,7 +146,7 @@ fun PlayerScreen(
                     }) {
 
                 BackgroundPoster(
-                    posterUrl = liveset?.edition?.posterUrl,
+                    posterUrl = liveset?.edition?.artworkUrl,
                     modifier = Modifier.matchParentSize()
                 )
 

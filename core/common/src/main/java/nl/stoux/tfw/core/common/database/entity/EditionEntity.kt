@@ -17,4 +17,5 @@ data class EditionEntity(
     val emptyNote: String? = null,
     val timetablerMode: Boolean = false,
     val posterUrl: String? = null,
+    val posterOptimizedUrl: String? = null,
 )

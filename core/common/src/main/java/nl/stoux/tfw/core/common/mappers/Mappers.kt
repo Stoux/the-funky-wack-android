@@ -10,6 +10,7 @@ import nl.stoux.tfw.core.common.database.entity.TrackEntity
 import nl.stoux.tfw.core.common.network.dto.EditionDto
 import nl.stoux.tfw.core.common.network.dto.LivesetDto
 import nl.stoux.tfw.core.common.network.dto.LivesetTrackDto
+import nl.stoux.tfw.core.common.network.dto.SrcsetDto
 
 /**
  * Mapping functions from network DTOs to Room entities.
@@ -24,6 +25,7 @@ fun EditionDto.toEditionEntity(): EditionEntity = EditionEntity(
     emptyNote = empty_note,
     timetablerMode = timetabler_mode,
     posterUrl = poster_url,
+    posterOptimizedUrl = selectOptimizedPosterUrl(),
 )
 
 fun LivesetDto.toLivesetEntity(): LivesetEntity = LivesetEntity(
@@ -53,6 +55,17 @@ fun LivesetTrackDto.toTrackEntity(): TrackEntity = TrackEntity(
     timestampSec = timestamp,
     orderInSet = order,
 )
+
+private fun EditionDto.selectOptimizedPosterUrl(): String? {
+    val set = poster_srcset_urls
+    if (!set.isNullOrEmpty()) {
+        // Prefer width 1500 if available, else take the largest available
+        val preferred = set.firstOrNull { it.width == 1500 } ?: set.maxByOrNull(SrcsetDto::width)
+        preferred?.url?.let { return it }
+    }
+    // Fallback to original poster_url if no srcset
+    return poster_url
+}
 
 private fun timeslotToRaw(timeslot: JsonElement?): String? = when (timeslot) {
     null -> null
