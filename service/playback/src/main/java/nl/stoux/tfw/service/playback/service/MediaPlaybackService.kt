@@ -175,6 +175,7 @@ class MediaPlaybackService : MediaLibraryService() {
 
     private inner class SessionCallback : MediaLibrarySession.Callback {
 
+        @OptIn(UnstableApi::class)
         override fun onConnect(
             session: MediaSession,
             controller: MediaSession.ControllerInfo
@@ -185,7 +186,7 @@ class MediaPlaybackService : MediaLibraryService() {
                 .add(commandNextTrack)
                 .build()
 
-            return MediaSession.ConnectionResult.accept(commands, parent.availablePlayerCommands)
+            return MediaSession.ConnectionResult.accept(commands, MediaSession.ConnectionResult.DEFAULT_PLAYER_COMMANDS)
         }
 
         override fun onCustomCommand(
