@@ -4,6 +4,9 @@ import android.app.PendingIntent
 import android.content.Intent
 import android.os.Bundle
 import android.util.Log
+import android.app.UiModeManager
+import android.content.pm.PackageManager
+import android.content.res.Configuration
 import androidx.annotation.OptIn
 import androidx.media3.common.MediaItem
 import androidx.media3.common.util.UnstableApi
@@ -58,17 +61,22 @@ class MediaPlaybackService : MediaLibraryService() {
         Log.d("MediaPlaybackService", "onCreate()")
         val player = playerManager.currentPlayer()
 
-        // Prepare session activity PendingIntent to open the app and show the player
-        val baseIntent = packageManager?.getLaunchIntentForPackage(packageName)
-        val sessionActivityIntent = baseIntent?.let {
-            Intent(it).apply {
-                action = ACTION_SHOW_PLAYER
-                // Ensure the existing activity is reused if running
-                addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+        // Prepare session activity PendingIntent to open the app and show the player (disabled on Automotive)
+        val sessionActivityPendingIntent = if (!isAutomotiveDevice()) {
+            val baseIntent = packageManager?.getLaunchIntentForPackage(packageName)
+            val sessionActivityIntent = baseIntent?.let {
+                Intent(it).apply {
+                    action = ACTION_SHOW_PLAYER
+                    // Ensure the existing activity is reused if running
+                    addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                }
             }
-        }
-        val sessionActivityPendingIntent = sessionActivityIntent?.let {
-            PendingIntent.getActivity(this, 0, it, PendingIntent.FLAG_IMMUTABLE)
+            sessionActivityIntent?.let {
+                PendingIntent.getActivity(this, 0, it, PendingIntent.FLAG_IMMUTABLE)
+            }
+        } else {
+            // On Automotive: do not set a session activity. Let the system Media Center handle the UI.
+            null
         }
 
         // Build the session
@@ -285,6 +293,13 @@ class MediaPlaybackService : MediaLibraryService() {
             mediaLibrarySession?.setCustomLayout(buildCustomLayout(hasPreviousTrack, hasNextTrack))
         }
 
+    }
+
+    private fun isAutomotiveDevice(): Boolean {
+        val feature = packageManager?.hasSystemFeature(PackageManager.FEATURE_AUTOMOTIVE) == true
+        val uiModeManager = getSystemService(UiModeManager::class.java)
+        val isCarUiMode = uiModeManager?.currentModeType == Configuration.UI_MODE_TYPE_CAR
+        return feature || isCarUiMode
     }
 
     companion object {
