@@ -188,13 +188,21 @@ class MainActivity : FragmentActivity() {
                             }
                         }
                         val currentLiveset by playerViewModel.currentLiveset.collectAsState()
-                        if (isPlaying || nowTitle != null) {
-                            val artist = currentLiveset?.liveset?.artistName
-                            val editionNo = currentLiveset?.edition?.number
-                            val subtitle = listOfNotNull(artist, editionNo?.let { "TFW #$it" }).joinToString(" / ")
+                        val currentTrack by playerViewModel.currentTrack.collectAsState()
+                        // Build Now Playing bar content from LivesetTrackManager-driven state
+                        val livesetTitle = currentLiveset?.liveset?.title
+                        val editionNo = currentLiveset?.edition?.number
+                        val displayTitle = currentTrack?.title ?: livesetTitle ?: nowTitle ?: "Playing"
+                        val subtitleParts = mutableListOf<String>()
+                        // Only add liveset title to subtitle when a distinct track is active
+                        if (currentTrack != null && !livesetTitle.isNullOrBlank()) subtitleParts.add(livesetTitle)
+                        if (editionNo != null) subtitleParts.add("TFW #$editionNo")
+                        val subtitle = subtitleParts.joinToString(" / ").ifBlank { null }
+                        if (isPlaying || nowTitle != null || currentLiveset != null) {
                             NowPlayingBar(
-                                title = nowTitle ?: "Playing",
-                                subtitle = subtitle.takeIf { it.isNotBlank() },
+                                liveset = currentLiveset,
+                                currentTrack = currentTrack,
+                                controllerTitle = nowTitle,
                                 isPlaying = isPlaying,
                                 progress = progress,
                                 onPlayPause = { playerViewModel.playPause() },
@@ -218,13 +226,23 @@ class MainActivity : FragmentActivity() {
 
 @Composable
 private fun NowPlayingBar(
-    title: String,
-    subtitle: String?,
+    liveset: nl.stoux.tfw.core.common.database.dao.LivesetWithDetails?,
+    currentTrack: nl.stoux.tfw.core.common.database.entity.TrackEntity?,
+    controllerTitle: String?,
     isPlaying: Boolean,
     progress: Float?,
     onPlayPause: () -> Unit,
     onOpenPlayer: () -> Unit
 ) {
+    // Compute display title and subtitle locally based on liveset/track
+    val livesetTitle = liveset?.liveset?.title
+    val editionNo = liveset?.edition?.number
+    val displayTitle = currentTrack?.title ?: livesetTitle ?: controllerTitle ?: "Playing"
+    val subtitleParts = mutableListOf<String>()
+    if (currentTrack != null && !livesetTitle.isNullOrBlank()) subtitleParts.add(livesetTitle)
+    if (!editionNo.isNullOrBlank()) subtitleParts.add("TFW #$editionNo")
+    val subtitle = subtitleParts.joinToString(" / ").ifBlank { null }
+
     Surface(
         modifier = Modifier
             .navigationBarsPadding()
@@ -232,7 +250,6 @@ private fun NowPlayingBar(
         color = MaterialTheme.colorScheme.surface
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
-            // Show progress only when known; otherwise no loading bar to avoid endless spinner
             val p = progress
             if (p != null) {
                 LinearProgressIndicator(
@@ -251,7 +268,7 @@ private fun NowPlayingBar(
             ) {
                 Column(Modifier.weight(1f)) {
                     Text(
-                        text = title,
+                        text = displayTitle,
                         style = MaterialTheme.typography.bodyLarge,
                         maxLines = 1,
                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
