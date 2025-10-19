@@ -61,6 +61,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
+import com.google.android.gms.cast.framework.CastButtonFactory
+import androidx.mediarouter.app.MediaRouteButton
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
@@ -224,6 +227,23 @@ fun BackgroundPoster(posterUrl: String?, modifier: Modifier) {
         modifier = modifier
             .background(brush = scrimBrush)
     ) {}
+}
+
+@Composable
+fun CastAction(modifier: Modifier = Modifier) {
+    AndroidView(
+        factory = { context ->
+            MediaRouteButton(context).apply {
+                // Wire up the selector using Cast SDK helper
+                try {
+                    CastButtonFactory.setUpMediaRouteButton(context, this)
+                } catch (t: Throwable) {
+                    // ignore if cast framework not available
+                }
+            }
+        },
+        modifier = modifier
+    )
 }
 
 @Composable
@@ -451,10 +471,8 @@ fun PlayerControls(
                     }
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (hasCast) {
-                        IconButton(onClick = { /* TODO: Implement cast */ }) {
-                            Icon(imageVector = Icons.Filled.Cast, contentDescription = "Cast")
-                        }
+                    if (true) {
+                        CastAction()
                         Spacer(modifier = Modifier.size(4.dp))
                     }
                     IconButton(onClick = { viewModel.openQueue() }) {

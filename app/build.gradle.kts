@@ -53,13 +53,20 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
     // Material icons for NowPlayingBar
-    implementation("androidx.compose.material:material-icons-extended")
+    implementation(libs.androidx.compose.material.icons.extended)
+
+    // AppCompat + Material Components for XML theme used by MediaRouter
+    implementation(libs.androidx.appcompat)
+    implementation(libs.material)
 
     // Navigation
     implementation(libs.androidx.navigation.compose)
 
     // Media3 controller to connect to playback service
     implementation(libs.media3.session)
+
+    // Cast framework for CastOptionsProvider
+    implementation(libs.play.services.cast.framework)
 
     // Hilt
     implementation(libs.hilt.android)

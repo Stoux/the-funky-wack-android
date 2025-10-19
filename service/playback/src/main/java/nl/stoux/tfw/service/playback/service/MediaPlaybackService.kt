@@ -95,10 +95,19 @@ class MediaPlaybackService : MediaLibraryService() {
         }
 
         // Change the underlying player if we switch (i.e. when casting).
+        var lastAttachedForResume: androidx.media3.common.Player? = player
         serviceMainScope.launch {
             playerManager.activePlayer.collect { activePlayer ->
                 if (activePlayer != null) {
                     mediaLibrarySession?.player = activePlayer
+                    if (lastAttachedForResume !== activePlayer) {
+                        // Re-attach resume coordinator to the new player
+                        serviceIOScope.launch {
+                            lastAttachedForResume?.let { runCatching { resumeCoordinator.detach(it) } }
+                            runCatching { resumeCoordinator.attach(activePlayer) }
+                            lastAttachedForResume = activePlayer
+                        }
+                    }
                 }
             }
         }

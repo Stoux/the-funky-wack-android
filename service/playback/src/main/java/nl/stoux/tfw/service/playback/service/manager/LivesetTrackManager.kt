@@ -49,15 +49,30 @@ class LivesetTrackManager @Inject constructor(
         serviceMainScope.launch {
             // Listen to changes to the activePlayer
             playerManager.activePlayer.collect { newPlayer ->
-                // We don't need to rebind if we're currently not bound either
+                // Only rebind if we were bound
                 val oldPlayer = boundPlayer ?: return@collect
 
-                // Unbind the old player
+                // Detach from old
                 oldPlayer.removeListener(this@LivesetTrackManager)
-                boundPlayer = null
+                progressReporter.stop()
 
-                // Bind to the new player (if set)
-                newPlayer?.addListener(this@LivesetTrackManager)
+                // Attach to new
+                if (newPlayer != null) {
+                    boundPlayer = newPlayer
+                    newPlayer.addListener(this@LivesetTrackManager)
+
+                    // Immediately emit current state to listeners
+                    listenersUpdater.onLivesetChanged(currentLiveset)
+                    currentTrackSection?.let { listenersUpdater.onTrackChanged(it) }
+                    listenersUpdater.onTimeProgress(newPlayer.currentPosition, newPlayer.duration)
+
+                    // Resume progress updates if playing or should play
+                    if (newPlayer.isPlaying || newPlayer.playWhenReady) {
+                        progressReporter.start()
+                    }
+                } else {
+                    boundPlayer = null
+                }
             }
         }
     }
@@ -105,7 +120,7 @@ class LivesetTrackManager @Inject constructor(
         if (listenersUpdater.isEmpty()) {
             progressReporter.stop()
             boundPlayer?.removeListener(this)
-            boundPlayer?.release()
+            // Do NOT release the player here; it's owned by the service/PlayerManager (may be a CastPlayer)
             boundPlayer = null
         }
     }
@@ -113,13 +128,13 @@ class LivesetTrackManager @Inject constructor(
     fun toPreviousTrack() {
         val previousTrack = currentTrackSection?.prev
         if (previousTrack == null) return
-        boundPlayer?.seekTo(previousTrack.startAt)
+        boundPlayer?.let { p -> p.seekTo(p.currentMediaItemIndex, previousTrack.startAt) }
     }
 
     fun toNextTrack() {
         val nextTrack = currentTrackSection?.next
         if (nextTrack == null) return
-        boundPlayer?.seekTo(nextTrack.startAt)
+        boundPlayer?.let { p -> p.seekTo(p.currentMediaItemIndex, nextTrack.startAt) }
     }
 
     override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {

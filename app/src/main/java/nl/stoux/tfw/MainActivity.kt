@@ -48,11 +48,12 @@ import nl.stoux.tfw.feature.player.PlayerScreen
 import nl.stoux.tfw.feature.player.PlayerViewModel
 import nl.stoux.tfw.ui.theme.TheFunkyWackTheme
 import androidx.compose.ui.unit.dp
+import androidx.fragment.app.FragmentActivity
 import nl.stoux.tfw.service.playback.service.MediaPlaybackService
 
 @AndroidEntryPoint
 @OptIn(ExperimentalMaterial3Api::class)
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
     private val listViewModel: EditionListViewModel by viewModels()
     private val playerViewModel: PlayerViewModel by viewModels()
 

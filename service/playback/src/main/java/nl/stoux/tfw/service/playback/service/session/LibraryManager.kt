@@ -212,10 +212,23 @@ class LibraryManager @Inject constructor(
             artist = "TFW #${lwd.edition.number} - $artist"
         }
 
-        val playableUri = listOfNotNull(lwd.liveset.hqUrl, lwd.liveset.lqUrl, lwd.liveset.losslessUrl).firstOrNull()
+        val playableUrl = listOfNotNull(lwd.liveset.hqUrl, lwd.liveset.lqUrl, lwd.liveset.losslessUrl).firstOrNull()
+        val playableUri = playableUrl?.toUri()
+        val mimeType = when (playableUrl?.substringAfterLast('.', missingDelimiterValue = "")?.lowercase()) {
+            "mp3" -> "audio/mpeg"
+            "m4a", "mp4" -> "audio/mp4"
+            "aac" -> "audio/aac"
+            "flac" -> "audio/flac"
+            "wav" -> "audio/wav"
+            "ogg", "oga" -> "audio/ogg"
+            "opus" -> "audio/webm"
+            else -> null
+        }
+
         return MediaItem.Builder()
             .setMediaId(mediaId.original)
-            .setUri(playableUri?.toUri())
+            .setUri(playableUri)
+            .setMimeType(mimeType)
             .setMediaMetadata(
                 MediaMetadata.Builder()
                     .setTitle(title)
@@ -224,7 +237,7 @@ class LibraryManager @Inject constructor(
                     .setAlbumTitle("TFW #${lwd.edition.number}: ${lwd.edition.tagLine}")
                     .setArtworkUri(lwd.edition.posterUrl?.toUri())
                     .setIsBrowsable(lwd.tracks.firstOrNull{ it.timestampSec != null } != null)
-                    .setIsPlayable(playableUri != null)
+                    .setIsPlayable(playableUrl != null)
                     .build()
             )
             .build()

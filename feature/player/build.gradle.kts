@@ -41,7 +41,7 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
     // Material icons
-    implementation("androidx.compose.material:material-icons-extended")
+    implementation(libs.androidx.compose.material.icons.extended)
 
     // Image loading for poster
     implementation(libs.coil.compose)
@@ -52,6 +52,10 @@ dependencies {
 
     // Media3 controller (for PlayerViewModel)
     implementation(libs.media3.session)
+
+    // Cast button (MediaRouter + Cast framework for selector)
+    implementation(libs.androidx.mediarouter)
+    implementation(libs.play.services.cast.framework)
 
     // Hilt
     implementation(libs.hilt.android)

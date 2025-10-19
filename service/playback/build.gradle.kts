@@ -44,6 +44,10 @@ dependencies {
     // UI is optional for service, but handy for future use
     implementation(libs.media3.ui)
 
+    // Cast support (Media3 Cast extension and Google Cast framework)
+    implementation(libs.androidx.media3.cast)
+    implementation(libs.play.services.cast.framework)
+
     // Coroutines (for repository access in callbacks)
     implementation(libs.coroutines.android)
 

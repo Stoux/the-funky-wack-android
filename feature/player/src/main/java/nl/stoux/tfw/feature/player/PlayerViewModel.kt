@@ -12,6 +12,9 @@ import androidx.media3.session.SessionToken
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
+import com.google.android.gms.cast.framework.CastContext
+import com.google.android.gms.cast.framework.CastState
+import com.google.android.gms.cast.framework.CastStateListener
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -35,6 +38,10 @@ class PlayerViewModel @Inject constructor(
 ) : ViewModel() {
 
     private var controller: MediaController? = null
+
+    // Cast state monitoring (to show/hide Cast button)
+    private var castContextRef: CastContext? = null
+    private var castStateListener: CastStateListener? = null
 
     // Region: Core playback state
     private val _isPlaying = MutableStateFlow(false)
@@ -85,6 +92,18 @@ class PlayerViewModel @Inject constructor(
     init {
         // Bind to LivesetTrackManager for track segment skipping within livesets
         trackManagerUnbindCallback = livesetTrackManager.bind(TrackListener())
+
+        // Observe Cast availability to show/hide the Cast button
+        runCatching {
+            val ctx = CastContext.getSharedInstance(appContext)
+            castContextRef = ctx
+            _hasCast.value = ctx.castState != CastState.NO_DEVICES_AVAILABLE
+            val listener = CastStateListener { state ->
+                _hasCast.value = state != CastState.NO_DEVICES_AVAILABLE
+            }
+            castStateListener = listener
+            ctx.addCastStateListener(listener)
+        }.onFailure { /* Cast framework not on device or not initialized; keep hasCast=false */ }
 
         // Build a MediaController connected to our service
         viewModelScope.launch {
@@ -204,7 +223,9 @@ class PlayerViewModel @Inject constructor(
     }
 
     fun seekTo(positionMs: Long) {
-        controller?.seekTo(positionMs)
+        controller?.let { c ->
+            c.seekTo(c.currentMediaItemIndex, positionMs)
+        }
         updateDurations()
     }
 
@@ -217,7 +238,13 @@ class PlayerViewModel @Inject constructor(
     }
 
     override fun onCleared() {
-        super.onCleared()
+        // Remove Cast listener if registered
+        castStateListener?.let { listener ->
+            runCatching { castContextRef?.removeCastStateListener(listener) }
+        }
+        castStateListener = null
+        castContextRef = null
+
         // Stop progress updates and release the controller to avoid leaks
         progressJob?.cancel()
         progressJob = null
@@ -226,6 +253,8 @@ class PlayerViewModel @Inject constructor(
         // Unbind from liveset track manager
         trackManagerUnbindCallback?.invoke()
         trackManagerUnbindCallback = null
+
+        super.onCleared()
     }
 
     private inner class TrackListener : LivesetTrackListener {

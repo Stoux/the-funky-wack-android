@@ -11,6 +11,9 @@ composeBom = "2025.09.00"
 appcompat = "1.7.1"
 material = "1.13.0"
 # Added for core data layer
+media3Cast = "1.8.0"
+mediarouter = "1.8.1"
+playServicesCastFramework = "22.1.0"
 room = "2.8.0"
 retrofit = "2.12.0"
 okhttpBom = "4.12.0"
@@ -32,9 +35,12 @@ ksp = "2.2.20-2.0.3"
 media = "1.6.0"
 
 [libraries]
+androidx-compose-material-icons-extended = { module = "androidx.compose.material:material-icons-extended" }
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-datastore-preferences = { group = "androidx.datastore", name = "datastore-preferences", version = "1.1.1" }
 androidx-lifecycle-viewmodel-ktx = { group = "androidx.lifecycle", name = "lifecycle-viewmodel-ktx", version.ref = "lifecycleRuntimeKtx" }
+androidx-media3-cast = { module = "androidx.media3:media3-cast", version.ref = "media3Cast" }
+androidx-mediarouter = { module = "androidx.mediarouter:mediarouter", version.ref = "mediarouter" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
 androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }
@@ -51,6 +57,7 @@ androidx-compose-material3 = { group = "androidx.compose.material3", name = "mat
 androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "appcompat" }
 material = { group = "com.google.android.material", name = "material", version.ref = "material" }
 # Added Core data layer libraries
+play-services-cast-framework = { module = "com.google.android.gms:play-services-cast-framework", version.ref = "playServicesCastFramework" }
 room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
 room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
 room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }

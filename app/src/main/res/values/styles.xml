@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.App.CastDialog" parent="Theme.AppCompat.Dialog" />
+
+    <style name="Theme.App.CastDialog.Light" parent="Theme.App.CastDialog">
+        <item name="mediaRouteTheme">@style/ThemeOverlay.MediaRouter.Light</item>
+    </style>
+</resources>
