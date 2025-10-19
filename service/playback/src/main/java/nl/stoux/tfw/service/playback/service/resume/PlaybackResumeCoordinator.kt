@@ -22,6 +22,7 @@ import javax.inject.Singleton
 class PlaybackResumeCoordinator @Inject constructor(
     private val playbackStateRepository: PlaybackStateRepository,
     private val libraryManager: LibraryManager,
+    private val queueManager: nl.stoux.tfw.service.playback.service.queue.QueueManager,
 ) : Player.Listener {
 
     // Use IO scope for persistence and loading; hop to Main when touching the Player
@@ -86,28 +87,19 @@ class PlaybackResumeCoordinator @Inject constructor(
         if (last.mediaId.isEmpty()) return
 
         try {
-            // Parse the last media ID & make sure it's a (valid) liveset ID
-            val mediaId = CustomMediaId.from(last.mediaId)
-            val item: MediaItem? = when {
-                mediaId.isLiveset() -> libraryManager.livesetMediaItem(mediaId.getLivesetId()!!)
-                else -> return
+            // Don't do anything if something else already set the player
+            withContext(Dispatchers.Main) {
+                if (player.currentMediaItem != null) return@withContext
             }
 
-            // Invalid.
-            if (item == null) return
+            // Parse the last media ID & make sure it's a (valid) liveset ID
+            val mediaId = CustomMediaId.from(last.mediaId)
+            val livesetId = mediaId.getLivesetId() ?: return
 
-            // Prepare player to the last item and seek; do NOT autoplay
+            // Centralized restore: build full context and apply via QueueManager; do NOT autoplay
             withContext(Dispatchers.Main) {
-                // Don't play it if something else ready was found (i.e. direct link)
-                if (player.currentMediaItem != null) {
-                    return@withContext
-                }
-
-                // Load that media item & prepare the loader (but don't start it)
-                player.setMediaItem(item, last.positionMs)
-                player.prepare()
-
-                Log.d("PlaybackResume", "Restored state: ${last.mediaId}@${last.positionMs}}")
+                queueManager.setContextFromLiveset(livesetId = livesetId, startPositionMs = last.positionMs, autoplay = false)
+                Log.d("PlaybackResume", "Restored state (with context): ${last.mediaId}@${last.positionMs}}")
             }
         } catch (t: Throwable) {
             Log.e("PlaybackResume", "Failed to restore state", t)

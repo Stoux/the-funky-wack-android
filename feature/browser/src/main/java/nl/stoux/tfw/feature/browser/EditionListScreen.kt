@@ -16,6 +16,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Divider
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -38,12 +41,14 @@ fun EditionListScreen(
 
     onPlayClicked: (mediaId: CustomMediaId) -> Unit,
     onOpenPlayer: () -> Unit,
+    onAddToQueue: (livesetId: Long) -> Unit,
 ) {
     val editions by viewModel.editions.collectAsState()
     EditionList(
         editions = editions,
         onPlayClicked = onPlayClicked,
         onOpenPlayer = onOpenPlayer,
+        onAddToQueue = onAddToQueue,
         modifier = modifier
     )
 }
@@ -54,6 +59,7 @@ private fun EditionList(
     editions: List<EditionWithContent>,
     onPlayClicked: (mediaId: CustomMediaId) -> Unit,
     onOpenPlayer: () -> Unit,
+    onAddToQueue: (livesetId: Long) -> Unit,
     modifier: Modifier = Modifier
 ) {
     LazyColumn(modifier = modifier.fillMaxSize().padding(vertical = 4.dp)) {
@@ -87,6 +93,7 @@ private fun EditionList(
                             onOpenPlayer()
                         }
                     },
+                    onAddToQueueClicked = { onAddToQueue(lwd.liveset.id) },
                     modifier = Modifier.padding(horizontal = 16.dp)
                 )
                 Divider(color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
@@ -178,6 +185,7 @@ private fun LivesetRow(
     durationSec: Int?,
     isPlayable: Boolean,
     onPlay: () -> Unit,
+    onAddToQueueClicked: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Row(
@@ -212,9 +220,38 @@ private fun LivesetRow(
             }
         }
 
-        // Right: duration
-        if (durationSec != null) {
-            Text(text = formatDuration(durationSec), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        // Right: duration + overflow menu
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (durationSec != null) {
+                Text(
+                    text = formatDuration(durationSec),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            val menuExpanded = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+            Box {
+                IconButton(onClick = { menuExpanded.value = true }) {
+                    // Use simple text glyph to avoid adding icon deps
+                    Text("⋮")
+                }
+                DropdownMenu(
+                    expanded = menuExpanded.value,
+                    onDismissRequest = { menuExpanded.value = false }
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("Add to Queue") },
+                        onClick = {
+                            onAddToQueueClicked()
+                            menuExpanded.value = false
+                        }
+                    )
+                }
+            }
         }
     }
 }

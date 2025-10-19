@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.first
 import nl.stoux.tfw.core.common.database.dao.LivesetWithDetails
 import nl.stoux.tfw.core.common.database.entity.TrackEntity
 import nl.stoux.tfw.feature.player.waveforms.WaveformDownloader
@@ -35,6 +36,7 @@ class PlayerViewModel @Inject constructor(
     @ApplicationContext private val appContext: Context,
     private val livesetTrackManager: LivesetTrackManager,
     private val waveformDownloader: WaveformDownloader,
+    private val queueManager: nl.stoux.tfw.service.playback.service.queue.QueueManager,
 ) : ViewModel() {
 
     private var controller: MediaController? = null
@@ -172,14 +174,10 @@ class PlayerViewModel @Inject constructor(
     }
 
     fun playLiveset(mediaId: CustomMediaId) {
-        viewModelScope.launch {
-            val item = MediaItem.Builder()
-                .setMediaId(mediaId.original)
-                .build()
-            controller?.let { c ->
-                c.setMediaItem(item)
-                c.prepare()
-                c.play()
+        mediaId.getLivesetId()?.let { livesetId ->
+            // Centralized: let QueueManager build and apply the full context
+            viewModelScope.launch {
+                queueManager.setContextFromLiveset(livesetId = livesetId, startPositionMs = 0L, autoplay = true)
             }
         }
     }
@@ -195,7 +193,10 @@ class PlayerViewModel @Inject constructor(
     }
 
     fun nextLiveset() {
-        controller?.seekToNext()
+        // Route through QueueManager to ensure Next works at the end by wrapping appropriately
+        viewModelScope.launch {
+            queueManager.skipToNext()
+        }
     }
 
     fun skipTrackBackward() {
@@ -214,8 +215,21 @@ class PlayerViewModel @Inject constructor(
         }
     }
 
+    private val _showQueue = MutableStateFlow(false)
+    val showQueue: StateFlow<Boolean> = _showQueue.asStateFlow()
+
+    // Event counter to force actions on repeated queue openings
+    private val _queueOpenRequests = MutableStateFlow(0)
+    val queueOpenRequests: StateFlow<Int> = _queueOpenRequests.asStateFlow()
+
     fun openQueue() {
-        // TODO: Implement navigation to queue screen or show bottom sheet
+        _showQueue.value = true
+        // Increment to signal a new open request even if already open
+        _queueOpenRequests.value = _queueOpenRequests.value + 1
+    }
+
+    fun closeQueue() {
+        _showQueue.value = false
     }
 
     fun onCloseRequested() {

@@ -50,12 +50,18 @@ import nl.stoux.tfw.ui.theme.TheFunkyWackTheme
 import androidx.compose.ui.unit.dp
 import androidx.fragment.app.FragmentActivity
 import nl.stoux.tfw.service.playback.service.MediaPlaybackService
+import nl.stoux.tfw.service.playback.service.queue.QueueManager
+import nl.stoux.tfw.core.common.repository.EditionRepository
+import javax.inject.Inject
 
 @AndroidEntryPoint
 @OptIn(ExperimentalMaterial3Api::class)
 class MainActivity : FragmentActivity() {
     private val listViewModel: EditionListViewModel by viewModels()
     private val playerViewModel: PlayerViewModel by viewModels()
+
+    @Inject lateinit var queueManager: QueueManager
+    @Inject lateinit var editionRepository: EditionRepository
 
     // Signal from Activity lifecycle (e.g., notification tap) to Compose to open the player
     private val showPlayerRequest = mutableStateOf(false)
@@ -144,7 +150,7 @@ class MainActivity : FragmentActivity() {
                                 }
                             },
                             onGoFullScreen = {
-//                                playerIsFullScreen = true
+                                // playerIsFullScreen = true
                             }
                         )
                     }
@@ -153,12 +159,33 @@ class MainActivity : FragmentActivity() {
                         .padding(innerPadding)
                         .fillMaxSize()
                     ) {
+                        val showQueue by playerViewModel.showQueue.collectAsState()
+                        val queueOpenRequests by playerViewModel.queueOpenRequests.collectAsState()
+                        // Close the player sheet when queue opens, including repeated opens
+                        LaunchedEffect(queueOpenRequests) {
+                            if (showQueue) {
+                                scope.launch { scaffoldState.bottomSheetState.partialExpand() }
+                            }
+                        }
+                        // Back should close the player first; only close queue if player isn't open
+                        BackHandler(enabled = showQueue && !playerIsOpen) { playerViewModel.closeQueue() }
+
                         androidx.compose.foundation.layout.Box(modifier = Modifier.weight(1f)) {
-                            EditionListScreen(
-                                viewModel = listViewModel,
-                                onPlayClicked = { mediaId -> playerViewModel.playLiveset(mediaId) },
-                                onOpenPlayer = { scope.launch { scaffoldState.bottomSheetState.expand() } }
-                            )
+                            if (showQueue) {
+                                nl.stoux.tfw.feature.player.QueueScreen(
+                                    queueManager = queueManager,
+                                    editionRepository = editionRepository,
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                )
+                            } else {
+                                EditionListScreen(
+                                    viewModel = listViewModel,
+                                    onPlayClicked = { mediaId -> playerViewModel.playLiveset(mediaId) },
+                                    onOpenPlayer = { scope.launch { scaffoldState.bottomSheetState.expand() } },
+                                    onAddToQueue = { id -> queueManager.enqueueNext(id) }
+                                )
+                            }
                         }
                         val currentLiveset by playerViewModel.currentLiveset.collectAsState()
                         if (isPlaying || nowTitle != null) {

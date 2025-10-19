@@ -9,6 +9,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import nl.stoux.tfw.core.common.database.AppDatabase
 import nl.stoux.tfw.core.common.database.dao.EditionDao
+import nl.stoux.tfw.core.common.database.dao.ManualQueueDao
 import javax.inject.Singleton
 
 @Module
@@ -24,4 +25,7 @@ object DatabaseModule {
 
     @Provides
     fun provideEditionDao(db: AppDatabase): EditionDao = db.editionDao()
+
+    @Provides
+    fun provideManualQueueDao(db: AppDatabase): ManualQueueDao = db.manualQueueDao()
 }
