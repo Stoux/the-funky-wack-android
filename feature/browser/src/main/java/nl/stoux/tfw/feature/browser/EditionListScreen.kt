@@ -1,5 +1,7 @@
 package nl.stoux.tfw.feature.browser
 
+import android.content.Context
+import android.content.Intent
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -15,6 +17,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Divider
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -24,15 +28,21 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
 import nl.stoux.tfw.core.common.database.dao.EditionWithContent
 import nl.stoux.tfw.core.common.database.entity.artworkUrl
+import nl.stoux.tfw.feature.player.util.formatTime
+import nl.stoux.tfw.feature.player.util.shareLiveset
 import nl.stoux.tfw.service.playback.service.session.CustomMediaId
 
 @Composable
@@ -79,6 +89,7 @@ private fun EditionList(
             }
             items(edition.livesets, key = { it.liveset.id }) { lwd ->
                 LivesetRow(
+                    livesetId = lwd.liveset.id,
                     title = lwd.liveset.title,
                     artist = lwd.liveset.artistName,
                     genre = lwd.liveset.genre,
@@ -165,12 +176,12 @@ private fun EditionHeader(
         }
         // Right: poster (Coil)
         if (posterUrl != null) {
-            coil.compose.AsyncImage(
+            AsyncImage(
                 model = posterUrl,
                 contentDescription = "Edition poster",
                 modifier = Modifier
                     .height(96.dp)
-                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
+                    .clip(RoundedCornerShape(8.dp))
                     .fillMaxWidth(0.18f),
             )
         }
@@ -179,6 +190,7 @@ private fun EditionHeader(
 
 @Composable
 private fun LivesetRow(
+    livesetId: Long,
     title: String,
     artist: String,
     genre: String?,
@@ -189,6 +201,7 @@ private fun LivesetRow(
     onAddToQueueClicked: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context: Context = LocalContext.current
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -199,7 +212,7 @@ private fun LivesetRow(
         // Left: play "icon" button (text-based for now to avoid extra deps)
         Box(
             modifier = Modifier
-                .clip(androidx.compose.foundation.shape.CircleShape)
+                .clip(CircleShape)
                 .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = if (isPlayable) 0.5f else 0.2f))
                 .then(
                     if (isPlayable) Modifier
@@ -228,13 +241,13 @@ private fun LivesetRow(
         ) {
             if (durationSec != null) {
                 Text(
-                    text = formatDuration(durationSec),
+                    text = formatTime(durationSec * 1000L),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
-            val menuExpanded = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+            val menuExpanded = remember { mutableStateOf(false) }
             Box {
                 IconButton(onClick = { menuExpanded.value = true }) {
                     // Use simple text glyph to avoid adding icon deps
@@ -251,14 +264,15 @@ private fun LivesetRow(
                             menuExpanded.value = false
                         }
                     )
+                    DropdownMenuItem(
+                        text = { Text("Share") },
+                        onClick = {
+                            shareLiveset(context, livesetId)
+                            menuExpanded.value = false
+                        }
+                    )
                 }
             }
         }
     }
-}
-
-private fun formatDuration(totalSeconds: Int): String {
-    val m = totalSeconds / 60
-    val s = totalSeconds % 60
-    return "%d:%02d".format(m, s)
 }

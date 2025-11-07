@@ -32,6 +32,7 @@ android {
 dependencies {
     implementation(project(":core:common"))
     implementation(project(":service:playback"))
+    implementation(project(":feature:player"))
 
     // Compose UI
     implementation(platform(libs.androidx.compose.bom))

@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Divider
@@ -57,6 +58,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -70,6 +72,8 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import nl.stoux.tfw.core.common.database.entity.TrackEntity
 import nl.stoux.tfw.core.common.database.entity.artworkUrl
+import nl.stoux.tfw.feature.player.util.formatTime
+import nl.stoux.tfw.feature.player.util.shareLiveset
 import nl.stoux.tfw.feature.player.waveforms.ZoomableWaveform
 
 @Composable
@@ -470,6 +474,18 @@ fun PlayerControls(
                             tint = if (shuffleEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
+                    val context = LocalContext.current
+                    val livesetId = liveset?.liveset?.id
+                    if (livesetId != null) {
+                        IconButton(onClick = {
+                            shareLiveset(context, livesetId, positionMs)
+                        }) {
+                            Icon(
+                                imageVector = Icons.Filled.Share,
+                                contentDescription = "Share"
+                            )
+                        }
+                    }
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (true) {
@@ -625,13 +641,4 @@ fun TrackList(
         }
         Spacer(Modifier.height(8.dp))
     }
-}
-
-private fun formatTime(ms: Long): String {
-    if (ms <= 0) return "0:00"
-    val totalSeconds = ms / 1000
-    val h = (totalSeconds / 3600).toInt()
-    val m = (totalSeconds % 3600) / 60
-    val s = totalSeconds % 60
-    return if (h > 0) "%d:%02d:%02d".format(h, m, s) else "%d:%02d".format(m, s)
 }

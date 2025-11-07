@@ -53,12 +53,27 @@ import nl.stoux.tfw.service.playback.service.MediaPlaybackService
 import nl.stoux.tfw.service.playback.service.queue.QueueManager
 import nl.stoux.tfw.core.common.repository.EditionRepository
 import javax.inject.Inject
+import android.content.Intent
+import android.net.Uri
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.delay
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
+import nl.stoux.tfw.service.playback.service.session.CustomMediaId
+import nl.stoux.tfw.core.common.database.dao.LivesetWithDetails
+import kotlinx.coroutines.flow.first
+import nl.stoux.tfw.feature.player.util.formatTime
 
 @AndroidEntryPoint
 @OptIn(ExperimentalMaterial3Api::class)
 class MainActivity : FragmentActivity() {
     private val listViewModel: EditionListViewModel by viewModels()
     private val playerViewModel: PlayerViewModel by viewModels()
+    private val appLinkViewModel: AppLinkViewModel by viewModels()
 
     @Inject lateinit var queueManager: QueueManager
     @Inject lateinit var editionRepository: EditionRepository
@@ -66,8 +81,12 @@ class MainActivity : FragmentActivity() {
     // Signal from Activity lifecycle (e.g., notification tap) to Compose to open the player
     private val showPlayerRequest = mutableStateOf(false)
 
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Handle potential app links first; bounce excluded paths to browser and finish if needed
+        if (handleIncomingViewIntent(intent, finishIfBounced = true)) return
 
         // If launched with action to show player, request it
         if (intent?.action == MediaPlaybackService.ACTION_SHOW_PLAYER) {
@@ -105,6 +124,9 @@ class MainActivity : FragmentActivity() {
                 BackHandler(enabled = playerIsOpen) {
                     scope.launch { scaffoldState.bottomSheetState.partialExpand() }
                 }
+
+                // Deep link resolved state from ViewModel
+                val resolvedDeepLinkState by appLinkViewModel.resolved.collectAsState(initial = null)
 
                 BottomSheetScaffold(
                     modifier = Modifier.fillMaxSize(),
@@ -209,15 +231,88 @@ class MainActivity : FragmentActivity() {
                                 onOpenPlayer = { scope.launch { scaffoldState.bottomSheetState.expand() } }
                             )
                         }
+
+                        // Deep-link confirmation dialog via ViewModel
+                        val resolved = resolvedDeepLinkState
+                        if (resolved != null) {
+                            val dl = resolved.deepLink
+                            val lwd = resolved.liveset
+                            AlertDialog(
+                                onDismissRequest = {
+                                    appLinkViewModel.markConsumed()
+                                },
+                                title = {
+                                    val at = dl.positionMs?.let { " @ ${formatTime(it)}" } ?: ""
+                                    Text("Play \"${lwd.liveset.title}\"$at?")
+                                },
+                                text = {
+                                    val tag = lwd.edition.tagLine
+                                    val artist = lwd.liveset.artistName
+                                    val subtitle = buildString {
+                                        append("From TFW #${lwd.edition.number}")
+                                        if (!tag.isNullOrBlank()) append(": ").append(tag)
+                                        if (artist.isNotBlank()) append("\nby ").append(artist)
+                                    }
+                                    Text(subtitle)
+                                },
+                                confirmButton = {
+                                    TextButton(onClick = {
+                                        scope.launch {
+                                            // Start playback and seek if needed
+                                            val start = dl.positionMs ?: 0L
+                                            runCatching { queueManager.setContextFromLiveset(lwd.liveset.id, startPositionMs = start, autoplay = true) }
+                                            // Open player UI
+                                            scaffoldState.bottomSheetState.expand()
+                                            appLinkViewModel.markConsumed()
+                                        }
+                                    }) { Text("Play") }
+                                },
+                                dismissButton = {
+                                    TextButton(onClick = {
+                                        appLinkViewModel.markConsumed()
+                                    }) { Text("Not now") }
+                                }
+                            )
+                        }
                     }
                 }
             }
         }
     }
 
+    // Handle incoming app links and exclusions
+    private fun handleIncomingViewIntent(intent: Intent?, finishIfBounced: Boolean): Boolean {
+        val isView = intent?.action == Intent.ACTION_VIEW
+        val uri = intent?.takeIf { isView }?.data ?: return false
+
+        if (appLinkViewModel.shouldLetBrowserHandle(uri)) {
+            // Forward to browser
+            runCatching { startActivity(Intent(Intent.ACTION_VIEW, uri)) }
+            if (finishIfBounced) {
+                finish()
+                return true
+            }
+            return false
+        }
+
+        // Parse deep link (nullable) and route to ViewModel; UI will decide what to do
+        appLinkViewModel.handleIncomingDeepLink(uri)
+
+        // Prevent re-emission on configuration changes by clearing ACTION_VIEW data
+        setIntent(Intent(intent).apply {
+            data = null
+            action = null
+        })
+
+        return false
+    }
+
+
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        // First, try to handle as an incoming app link; don't finish when activity already running
+        handleIncomingViewIntent(intent, finishIfBounced = false)
         if (intent.action == MediaPlaybackService.ACTION_SHOW_PLAYER) {
             showPlayerRequest.value = true
         }
