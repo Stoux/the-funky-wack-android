@@ -161,6 +161,8 @@ fun AnimatedZoomableWaveform(
  *
  * @param windowSize The number of peaks that should be displayed for the current zoom level, should match allPeaks.size when fully zoomed out
  */
+private data class WaveBar(val avg: Float, val peak: Float)
+
 @Composable
 private fun Waveform(
     allPeaks: List<Int>,
@@ -200,8 +202,24 @@ private fun Waveform(
     }
 
     // Precompute the entire waveform into bars using the current stride, aligned from index 0
-    val fullBars = remember(allPeaks, samplesPerBar) {
-        if (allPeaks.isEmpty()) emptyList() else allPeaks.chunked(samplesPerBar) { it.maxOrNull() ?: 0 }
+    val fullBars: List<WaveBar> = remember(allPeaks, samplesPerBar) {
+        if (allPeaks.isEmpty()) emptyList() else {
+            val globalPeak = (allPeaks.maxOrNull() ?: 1).coerceAtLeast(1)
+            val norm = 1f / globalPeak.toFloat()
+            allPeaks.chunked(samplesPerBar) { chunk ->
+                val maxVal = (chunk.maxOrNull() ?: 0).toFloat()
+                // Use P60 (60th percentile) within the chunk as the inner/average metric for better perceived loudness
+                val p60 = if (chunk.isEmpty()) 0f else run {
+                    val sorted = chunk.sorted()
+                    val idx = ((sorted.size - 1) * 0.60f).toInt().coerceIn(0, sorted.lastIndex)
+                    sorted[idx].toFloat()
+                }
+                WaveBar(
+                    avg = (p60 * norm).coerceIn(0f, 1f),
+                    peak = (maxVal * norm).coerceIn(0f, 1f)
+                )
+            }
+        }
     }
 
     // Determine visible bar window based on pan, using the same bars grid
@@ -231,31 +249,28 @@ private fun Waveform(
         modifier = modifier
             // One-finger press and drag to seek continuously
             .pointerInput(totalSamples, samplesPerBar, startBarIndex, barsFit) {
-                detectDragGesturesAfterLongPress(
-                    onDragStart = { offset ->
-                        val newProgress = computeProgressFromX(
-                            x = offset.x,
-                            canvasWidth = size.width.toFloat(),
-                            startBarIndex = startBarIndex,
-                            barsFit = barsFit,
-                            samplesPerBar = samplesPerBar,
-                            totalSamples = totalSamples
-                        )
-                        onProgressChange(newProgress)
-                    },
-                    onDrag = { change, _ ->
-                        val newProgress = computeProgressFromX(
-                            x = change.position.x,
-                            canvasWidth = size.width.toFloat(),
-                            startBarIndex = startBarIndex,
-                            barsFit = barsFit,
-                            samplesPerBar = samplesPerBar,
-                            totalSamples = totalSamples
-                        )
-                        onProgressChange(newProgress)
-                        change.consume()
-                    }
-                )
+                detectDragGesturesAfterLongPress(onDragStart = { offset ->
+                    val newProgress = computeProgressFromX(
+                        x = offset.x,
+                        canvasWidth = size.width.toFloat(),
+                        startBarIndex = startBarIndex,
+                        barsFit = barsFit,
+                        samplesPerBar = samplesPerBar,
+                        totalSamples = totalSamples
+                    )
+                    onProgressChange(newProgress)
+                }, onDrag = { change, _ ->
+                    val newProgress = computeProgressFromX(
+                        x = change.position.x,
+                        canvasWidth = size.width.toFloat(),
+                        startBarIndex = startBarIndex,
+                        barsFit = barsFit,
+                        samplesPerBar = samplesPerBar,
+                        totalSamples = totalSamples
+                    )
+                    onProgressChange(newProgress)
+                    change.consume()
+                })
             }
             // Tap to seek with ripple feedback
             .pointerInput(totalSamples, samplesPerBar, startBarIndex, barsFit) {
@@ -270,8 +285,7 @@ private fun Waveform(
                             totalSamples = totalSamples
                         )
                         onProgressChange(newProgress)
-                    }
-                )
+                    })
             }
             .onSizeChanged { size ->
                 val barWidthPx = with(density) { barWidth.toPx() }
@@ -288,8 +302,13 @@ private fun Waveform(
         val absoluteBarFloat = absoluteSample / samplesPerBar.toFloat()
         val visibleProgress = ((absoluteBarFloat - startBarIndex) / visibleCount.toFloat()).coerceIn(0f, 1f)
 
-        // Normalize to the local window max to keep visuals balanced
-        val maxPeak = (visibleBars.maxOrNull() ?: 1).coerceAtLeast(1)
+        // Stage B: viewport-local normalization using percentile of visible peaks
+        val localPeaks = visibleBars.map { it.peak }.sorted()
+        val p95Index = ((localPeaks.size - 1) * 0.95f).toInt().coerceIn(0, (localPeaks.size - 1).coerceAtLeast(0))
+        val localRef = (if (localPeaks.isNotEmpty()) localPeaks[p95Index] else 1f).coerceIn(0.2f, 1.0f)
+        val gLocal = 1f / localRef
+        val alpha = 0.5f // blend to reduce pumping
+        val g = 1f * (1 - alpha) + gLocal * alpha
 
         // Step between spike left edges
         val stepX = size.width / visibleCount
@@ -298,21 +317,93 @@ private fun Waveform(
         // Mono representation covering full height: draw bars from bottom up to fill available height
         val maxBarHeight = size.height
 
-        visibleBars.forEachIndexed { index, p ->
-            val amp = (p.toFloat() / maxPeak.toFloat()).coerceIn(0f, 1f)
-            val spikeHeight = (amp * maxBarHeight * heightMultiplier).coerceAtLeast(minBarHeightPx)
+
+        // --- A. PLAYED STATE (Bright White) ---
+        // High-contrast, active, and clean.
+
+        // Base colors for the gradient
+        val playedBaseColorStart = Color.White
+        val playedBaseColorEnd = Color(0xFFF5F5F5) // A very slightly off-white gray
+
+        // 1. OUTER (Max) Brush - The subtle "glow"
+        // This is drawn FIRST.
+        val outerBrushPlayed = Brush.verticalGradient(
+            listOf(
+                playedBaseColorStart.copy(alpha = 0.3f), // 30% opacity
+                playedBaseColorEnd.copy(alpha = 0.3f)
+            )
+        )
+
+        // 2. INNER (Average) Brush - The solid "body"
+        // This is drawn SECOND (on top).
+        val innerBrushPlayed = Brush.verticalGradient(
+            listOf(
+                playedBaseColorStart.copy(alpha = 0.95f), // 95% opacity
+                playedBaseColorEnd.copy(alpha = 0.95f)
+            )
+        )
+
+
+        // --- B. UNPLAYED STATE (Subtle Light Gray) ---
+        // Muted, inactive, and recedes visually.
+
+        // Base colors for the gradient
+        val unplayedBaseColorStart = Color(0xFFB0BEC5) // Material Blue Gray 200
+        val unplayedBaseColorEnd = Color(0xFF90A4AE)   // Material Blue Gray 300
+
+        // 1. OUTER (Max) Brush - The very subtle "glow"
+        // This is drawn FIRST.
+        val outerBrushUnplayed = Brush.verticalGradient(
+            listOf(
+                unplayedBaseColorStart.copy(alpha = 0.2f), // 20% opacity (as requested)
+                unplayedBaseColorEnd.copy(alpha = 0.2f)
+            )
+        )
+
+        // 2. INNER (Average) Brush - The "body"
+        // This is drawn SECOND (on top).
+        val innerBrushUnplayed = Brush.verticalGradient(
+            listOf(
+                unplayedBaseColorStart.copy(alpha = 0.6f), // 60% opacity (clearly inactive)
+                unplayedBaseColorEnd.copy(alpha = 0.6f)
+            )
+        )
+
+
+        visibleBars.forEachIndexed { index, b ->
+            val peakV = (b.peak * g).coerceIn(0f, 1f)
+            val avgV = (b.avg * g).coerceIn(0f, 1f)
+
+            val hPeak = (peakV * maxBarHeight * heightMultiplier).coerceAtLeast(minBarHeightPx)
+            val rawHAvg = (avgV * maxBarHeight * heightMultiplier).coerceAtLeast(minBarHeightPx)
+            val hAvg = min(rawHAvg, hPeak)
+
             val x = index * stepX + (stepX - spikeWidth) / 2f
-            val y = (maxBarHeight - spikeHeight)
+            val yPeak = (maxBarHeight - hPeak)
+            val yAvg = (maxBarHeight - hAvg)
 
             val currentSpikeProgress = (index + 1f) / visibleCount.toFloat()
             val isPlayed = currentSpikeProgress <= visibleProgress
 
-            val brush = if (isPlayed) progressBrush else waveformBrush
+            // Colors per played state:
+            // Played: Redish (peak), Greenish (avg)
+            // Not played: Grayish Redish (peak), Grayish Greenish (avg)
+            val peakBrush = if (isPlayed) outerBrushPlayed else outerBrushUnplayed
+            val avgBrush = if (isPlayed) innerBrushPlayed else innerBrushUnplayed
 
+            // Draw peak (outer/background)
             drawRoundRect(
-                brush = brush,
-                topLeft = Offset(x, y),
-                size = Size(spikeWidth, spikeHeight),
+                brush = peakBrush,
+                topLeft = Offset(x, yPeak),
+                size = Size(spikeWidth, hPeak),
+                cornerRadius = CornerRadius(2.dp.toPx())
+            )
+
+            // Draw average on top with same width as peak, clamped to not exceed peak height
+            drawRoundRect(
+                brush = avgBrush,
+                topLeft = Offset(x, yAvg),
+                size = Size(spikeWidth, hAvg),
                 cornerRadius = CornerRadius(2.dp.toPx())
             )
         }
