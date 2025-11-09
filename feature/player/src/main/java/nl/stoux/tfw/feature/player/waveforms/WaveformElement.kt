@@ -4,6 +4,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Box
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -52,16 +53,12 @@ fun ZoomableWaveform(
     onProgressChange: (Float) -> Unit,
     waveformBrush: Brush = Brush.verticalGradient(listOf(Color(0xFF444444), Color(0xFF666666))),
     progressBrush: Brush = Brush.verticalGradient(listOf(Color.White, Color.LightGray)),
+    heightMultiplier: Float = 1f,
 ) {
     var zoom by remember { mutableFloatStateOf(MINIMUM_ZOOM) }
     var pan by remember { mutableFloatStateOf(0f) } // pan in indices
     var containerSize by remember { mutableStateOf(IntSize.Zero) }
 
-    LaunchedEffect(fullPeaks) {
-        // Reset the zoom/pan when the waveform changes
-        zoom = MINIMUM_ZOOM
-        pan = 0f
-    }
 
     // Derived window
     val total = fullPeaks.size
@@ -104,9 +101,47 @@ fun ZoomableWaveform(
             onProgressChange = onProgressChange,
             waveformBrush = waveformBrush,
             progressBrush = progressBrush,
-            modifier = Modifier.matchParentSize()
+            modifier = Modifier.matchParentSize(),
+            heightMultiplier = heightMultiplier
         )
     }
+}
+
+@Composable
+fun AnimatedZoomableWaveform(
+    trackKey: Any?,
+    fullPeaks: List<Int>,
+    progress: Float,
+    onProgressChange: (Float) -> Unit,
+    modifier: Modifier = Modifier,
+    waveformBrush: Brush = Brush.verticalGradient(listOf(Color(0xFF444444), Color(0xFF666666))),
+    progressBrush: Brush = Brush.verticalGradient(listOf(Color.White, Color.LightGray)),
+) {
+    val height = remember { Animatable(1f) }
+
+    // Collapse when the track changes
+    LaunchedEffect(trackKey) {
+        // animate down; if first composition and no change, it's fine to animate quickly
+        height.animateTo(0f, animationSpec = tween(durationMillis = 300))
+    }
+
+    // Grow in when peaks are ready (non-empty call site ensures this)
+    LaunchedEffect(fullPeaks) {
+        if (fullPeaks.isNotEmpty()) {
+            height.snapTo(0f)
+            height.animateTo(1f, animationSpec = tween(durationMillis = 400))
+        }
+    }
+
+    ZoomableWaveform(
+        fullPeaks = fullPeaks,
+        progress = progress,
+        onProgressChange = onProgressChange,
+        modifier = modifier,
+        waveformBrush = waveformBrush,
+        progressBrush = progressBrush,
+        heightMultiplier = height.value
+    )
 }
 
 /**
@@ -125,6 +160,7 @@ private fun Waveform(
     onProgressChange: (Float) -> Unit = {},
     waveformBrush: Brush = Brush.verticalGradient(listOf(Color(0xFF444444), Color(0xFF666666))),
     progressBrush: Brush = Brush.verticalGradient(listOf(Color.White, Color.LightGray)),
+    heightMultiplier: Float = 1f,
 ) {
 
     // Target a SoundCloud-like thin bar look
@@ -253,7 +289,7 @@ private fun Waveform(
 
         visibleBars.forEachIndexed { index, p ->
             val amp = (p.toFloat() / maxPeak.toFloat()).coerceIn(0f, 1f)
-            val spikeHeight = (amp * maxBarHeight).coerceAtLeast(minBarHeightPx)
+            val spikeHeight = (amp * maxBarHeight * heightMultiplier).coerceAtLeast(minBarHeightPx)
             val x = index * stepX + (stepX - spikeWidth) / 2f
             val y = (maxBarHeight - spikeHeight)
 

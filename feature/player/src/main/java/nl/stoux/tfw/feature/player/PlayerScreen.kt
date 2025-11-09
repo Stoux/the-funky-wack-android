@@ -75,6 +75,7 @@ import nl.stoux.tfw.core.common.database.entity.artworkUrl
 import nl.stoux.tfw.feature.player.util.formatTime
 import nl.stoux.tfw.feature.player.util.shareLiveset
 import nl.stoux.tfw.feature.player.waveforms.ZoomableWaveform
+import nl.stoux.tfw.feature.player.waveforms.AnimatedZoomableWaveform
 
 @Composable
 fun PlayerScreen(
@@ -344,25 +345,37 @@ fun PlayerControls(
             val waveformPeaks = viewModel.waveformPeaks.collectAsState()
 
             val peaks = waveformPeaks.value
-            if (peaks != null && peaks.isNotEmpty()) {
-                // Interactive waveform: tap to seek, pinch to zoom, pan to scroll
-                ZoomableWaveform(
-                    fullPeaks = peaks,
-                    progress = (progress ?: 0f).coerceIn(0f, 1f),
-                    onProgressChange = { p -> viewModel.seekToPercent(p) },
-                    modifier = Modifier
-                        .matchParentSize()
-                )
-            } else {
-                // Fallback when no waveform is available yet
-                Slider(
-                    value = (progress ?: 0f).coerceIn(0f, 1f),
-                    onValueChange = { viewModel.seekToPercent(it) },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .align(Alignment.BottomCenter)
-                        .padding(horizontal = 8.dp, vertical = 8.dp)
-                )
+            val trackKey: Any? = liveset?.liveset?.id ?: liveset?.liveset?.audioWaveformUrl
+
+            when {
+                peaks != null && peaks.isNotEmpty() -> {
+                    // Interactive waveform with animated height collapse/grow
+                    AnimatedZoomableWaveform(
+                        trackKey = trackKey,
+                        fullPeaks = peaks,
+                        progress = (progress ?: 0f).coerceIn(0f, 1f),
+                        onProgressChange = { p -> viewModel.seekToPercent(p) },
+                        modifier = Modifier.matchParentSize()
+                    )
+                }
+                peaks != null && peaks.isEmpty() -> {
+                    // Loading state → show a small loader centered; keep slider space free
+                    androidx.compose.material3.CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp).align(Alignment.Center),
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+                else -> {
+                    // Unavailable: fall back to Slider
+                    Slider(
+                        value = (progress ?: 0f).coerceIn(0f, 1f),
+                        onValueChange = { viewModel.seekToPercent(it) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .align(Alignment.BottomCenter)
+                            .padding(horizontal = 8.dp, vertical = 8.dp)
+                    )
+                }
             }
         }
 

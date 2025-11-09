@@ -291,11 +291,15 @@ class PlayerViewModel @Inject constructor(
             // Check if we need to load a new waveform
             val waveformUrl = liveset?.liveset?.audioWaveformUrl
             if (waveformUrl != null) {
+                // Signal loading state immediately with empty list (tri-state: empty = loading)
+                _waveformPeaks.value = emptyList()
                 waveformDownloader.loadWaveform(waveformUrl) { data ->
                     _waveformPeaks.value = data
                 }
-            } else
+            } else {
+                // Unavailable
                 _waveformPeaks.value = null
+            }
         }
 
         override fun onTrackChanged(track: TrackEntity?) {
