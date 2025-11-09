@@ -209,22 +209,40 @@ class LivesetTrackManager @Inject constructor(
         // TODO
 
         // Early bail if we're missing stuff
-        val currentTrackSection = this.currentTrackSection
-        if (currentTrackSection == null) {
-            return;
+        val currentTrackSection = this.currentTrackSection ?: return
+
+        val player = boundPlayer ?: return
+        val mediaItem = player.currentMediaItem ?: return
+        val liveset = currentLiveset ?: return
+
+        // If there are no timestamped tracks for this liveset, ensure base metadata is set and exit
+        val hasTimestampedTracks = liveset.tracks.any { it.timestampSec != null }
+        if (!hasTimestampedTracks) {
+            val baseUpdated = mediaItem.buildUpon()
+                .setMediaMetadata(
+                    mediaItem.mediaMetadata.buildUpon()
+                        .setTitle(liveset.liveset.title)
+                        .setArtist(liveset.liveset.artistName)
+                        .build()
+                )
+                .build()
+            player.replaceMediaItem(player.currentMediaItemIndex, baseUpdated)
+            listenersUpdater.onTrackChanged(null)
+            listenersUpdater.onNextPrevTrackStatusChanged(hasPreviousTrack = false, hasNextTrack = false)
+            return
         }
 
         // Resolve the current position
-        val position = boundPlayer?.currentPosition
-        val playingSection = if (position == null) null else currentTrackSection.findPlayingSection(position)
+        val position = player.currentPosition
+        val playingSection = currentTrackSection.findPlayingSection(position)
         if (playingSection == currentTrackSection) {
             // We're already showing the correct item
-            return;
+            return
         } else if (playingSection == null) {
             // Nothing playing?
             listenersUpdater.onTrackChanged(null)
             listenersUpdater.onNextPrevTrackStatusChanged(hasPreviousTrack = false, hasNextTrack = false)
-            return;
+            return
         }
 
         // We've hit a different section! Make sure the underlying track has also changed
@@ -232,20 +250,6 @@ class LivesetTrackManager @Inject constructor(
         listenersUpdater.onTrackChanged(playingSection)
         if (currentTrackSection.track?.id == playingSection.track?.id) {
             // Same track somehow. No need to update the player. Might be a different next/prev?
-            return
-        }
-
-        // Sanity checks: we need liveset info
-        val liveset = currentLiveset
-        if (liveset == null) {
-            return
-        }
-
-        // Update the media player!
-        // TODO: Make this an option
-        val player = boundPlayer
-        val mediaItem = player?.currentMediaItem;
-        if (mediaItem == null) {
             return
         }
 
