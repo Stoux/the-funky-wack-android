@@ -37,11 +37,11 @@ import kotlin.math.min
 
 
 private const val MINIMUM_ZOOM = 1f
-private const val MAXIMUM_ZOOM = 12f
+private const val DEFAULT_MAXIMUM_ZOOM = 12f
 
 /**
  * Zoomable and pannable waveform. Maintains its own zoom/pan state.
- * - Pinch to zoom (1x..12x).
+ * - Pinch to zoom (1x..maxZoom).
  * - Drag with two fingers (transform pan) to move window; one-finger swipe is also supported via transform pan delta.
  * - Tap to seek within the visible window.
  */
@@ -54,6 +54,7 @@ fun ZoomableWaveform(
     waveformBrush: Brush = Brush.verticalGradient(listOf(Color(0xFF444444), Color(0xFF666666))),
     progressBrush: Brush = Brush.verticalGradient(listOf(Color.White, Color.LightGray)),
     heightMultiplier: Float = 1f,
+    maxZoom: Float = DEFAULT_MAXIMUM_ZOOM,
 ) {
     var zoom by remember { mutableFloatStateOf(MINIMUM_ZOOM) }
     var pan by remember { mutableFloatStateOf(0f) } // pan in indices
@@ -74,7 +75,7 @@ fun ZoomableWaveform(
                 detectTransformGestures { centroid, panChange, zoomChange, _ ->
                     val widthPx = containerSize.width.toFloat().coerceAtLeast(1f)
                     val oldZoom = zoom
-                    val newZoom = (oldZoom * zoomChange).coerceIn(MINIMUM_ZOOM, MAXIMUM_ZOOM)
+                    val newZoom = (oldZoom * zoomChange).coerceIn(MINIMUM_ZOOM, maxZoom)
 
                     val oldWindow = total / oldZoom
                     val newWindow = total / newZoom
@@ -116,6 +117,8 @@ fun AnimatedZoomableWaveform(
     modifier: Modifier = Modifier,
     waveformBrush: Brush = Brush.verticalGradient(listOf(Color(0xFF444444), Color(0xFF666666))),
     progressBrush: Brush = Brush.verticalGradient(listOf(Color.White, Color.LightGray)),
+    durationMs: Long? = null,
+    maxZoomOverride: Float? = null,
 ) {
     val height = remember { Animatable(1f) }
 
@@ -133,6 +136,13 @@ fun AnimatedZoomableWaveform(
         }
     }
 
+    // Compute dynamic max zoom: 30 min → 12f, 60 min → 18f, +6f per extra 60 min
+    val computedMaxZoom = maxZoomOverride ?: run {
+        val minutes = ((durationMs ?: 0L).toFloat() / 60000f)
+        val extraFactor = max(0f, (minutes - 30f) / 60f) // 0 at 30m, 0.5 at 60m, 1.0 at 90m
+        (DEFAULT_MAXIMUM_ZOOM * (1f + extraFactor)).coerceAtMost(48f)
+    }
+
     ZoomableWaveform(
         fullPeaks = fullPeaks,
         progress = progress,
@@ -140,7 +150,8 @@ fun AnimatedZoomableWaveform(
         modifier = modifier,
         waveformBrush = waveformBrush,
         progressBrush = progressBrush,
-        heightMultiplier = height.value
+        heightMultiplier = height.value,
+        maxZoom = computedMaxZoom
     )
 }
 

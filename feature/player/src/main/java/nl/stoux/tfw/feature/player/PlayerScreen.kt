@@ -355,7 +355,8 @@ fun PlayerControls(
                         fullPeaks = peaks,
                         progress = (progress ?: 0f).coerceIn(0f, 1f),
                         onProgressChange = { p -> viewModel.seekToPercent(p) },
-                        modifier = Modifier.matchParentSize()
+                        modifier = Modifier.matchParentSize(),
+                        durationMs = durationMs
                     )
                 }
                 peaks != null && peaks.isEmpty() -> {
