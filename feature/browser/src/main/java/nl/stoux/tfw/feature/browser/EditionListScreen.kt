@@ -38,6 +38,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.wrapContentSize
 import coil.compose.AsyncImage
 import nl.stoux.tfw.core.common.database.dao.EditionWithContent
 import nl.stoux.tfw.core.common.database.entity.artworkUrl
@@ -83,6 +91,7 @@ private fun EditionList(
                         date = edition.edition.date,
                         notes = edition.edition.notes,
                         posterUrl = edition.edition.artworkUrl,
+                        fullPosterUrl = edition.edition.posterUrl,
                     )
                     Divider(color = MaterialTheme.colorScheme.surfaceVariant)
                 }
@@ -121,8 +130,12 @@ private fun EditionHeader(
     date: String?,
     notes: String?,
     posterUrl: String?,
+    fullPosterUrl: String? = null,
     modifier: Modifier = Modifier
 ) {
+    val showPoster = remember { mutableStateOf(false) }
+    val largePosterUrl = fullPosterUrl ?: posterUrl
+
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -182,9 +195,78 @@ private fun EditionHeader(
                 modifier = Modifier
                     .height(96.dp)
                     .clip(RoundedCornerShape(8.dp))
-                    .fillMaxWidth(0.18f),
+                    .fillMaxWidth(0.18f)
+                    .clickable { showPoster.value = true },
             )
         }
+    }
+
+    if (showPoster.value && largePosterUrl != null) {
+        Dialog(onDismissRequest = { showPoster.value = false }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Transparent)
+                    .clickable(
+                        indication = null,
+                        interactionSource = remember { MutableInteractionSource() }
+                    ) { showPoster.value = false },
+                contentAlignment = Alignment.Center
+            ) {
+                // Zoomable image that fits screen by default and supports pinch-to-zoom
+                ZoomablePosterImage(
+                    url = largePosterUrl,
+                    contentDescription = "Edition poster full size",
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ZoomablePosterImage(
+    url: String,
+    contentDescription: String,
+    modifier: Modifier = Modifier,
+) {
+    val scaleState = remember { mutableStateOf(1f) }
+    val offsetXState = remember { mutableStateOf(0f) }
+    val offsetYState = remember { mutableStateOf(0f) }
+
+    Box(
+        modifier = modifier
+            .pointerInput(Unit) {
+                detectTransformGestures { _, pan, zoom, _ ->
+                    val oldScale = scaleState.value
+                    val newScale = (oldScale * zoom).coerceIn(1f, 5f)
+                    scaleState.value = newScale
+
+                    if (newScale <= 1f) {
+                        // Reset pan when back to base scale
+                        offsetXState.value = 0f
+                        offsetYState.value = 0f
+                    } else {
+                        offsetXState.value += pan.x
+                        offsetYState.value += pan.y
+                    }
+                }
+            },
+        contentAlignment = Alignment.Center
+    ) {
+        AsyncImage(
+            model = url,
+            contentDescription = contentDescription,
+            contentScale = ContentScale.Fit,
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer(
+                    scaleX = scaleState.value,
+                    scaleY = scaleState.value,
+                    translationX = offsetXState.value,
+                    translationY = offsetYState.value,
+                )
+        )
     }
 }
 
