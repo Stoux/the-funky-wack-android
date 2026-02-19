@@ -36,6 +36,7 @@ fun TvBrowseScreen(
     val queueState by viewModel.queueState.collectAsState()
     val currentLiveset by viewModel.currentLiveset.collectAsState()
     val currentTrack by viewModel.currentTrack.collectAsState()
+    val resumeState by viewModel.resumeState.collectAsState()
 
     Box(
         modifier = Modifier
@@ -58,9 +59,10 @@ fun TvBrowseScreen(
             val listState = rememberLazyListState()
             val coroutineScope = rememberCoroutineScope()
 
-            // Check if NowPlayingCard is visible (has current item or is playing)
+            // Check if NowPlayingCard or ContinueCard is visible
             val currentItem = queueState.effective.getOrNull(queueState.currentEffectiveIndex)
             val hasNowPlaying = currentItem != null || queueState.isPlaying
+            val hasTopCard = hasNowPlaying || resumeState != null
 
             LazyColumn(
                 state = listState,
@@ -85,14 +87,26 @@ fun TvBrowseScreen(
                     }
                 }
 
-                // Now Playing card (if something is playing/paused)
+                // Now Playing card (if something is playing/paused) OR Continue card (if resume state exists)
                 item {
-                    NowPlayingCard(
-                        queueState = queueState,
-                        currentLiveset = currentLiveset,
-                        currentTrack = currentTrack,
-                        onClick = onNowPlayingClick
-                    )
+                    if (hasNowPlaying) {
+                        NowPlayingCard(
+                            queueState = queueState,
+                            currentLiveset = currentLiveset,
+                            currentTrack = currentTrack,
+                            onClick = onNowPlayingClick
+                        )
+                    } else {
+                        resumeState?.let { state ->
+                            ContinueCard(
+                                resumeState = state,
+                                onClick = {
+                                    viewModel.resumePlayback()
+                                    onNowPlayingClick()
+                                }
+                            )
+                        }
+                    }
                 }
 
                 // Edition rows with poster + liveset list
@@ -107,7 +121,7 @@ fun TvBrowseScreen(
                             onLivesetClick(livesetId)
                         },
                         onHeaderClick = { onEditionClick(edition.edition.id) },
-                        onUpPressed = if (edition == editions.firstOrNull() && !hasNowPlaying) {
+                        onUpPressed = if (edition == editions.firstOrNull() && !hasTopCard) {
                             { coroutineScope.launch { listState.animateScrollToItem(0) } }
                         } else null
                     )
