@@ -34,6 +34,9 @@ data class CustomMediaId(
         // => Top level options
         private const val MENU_ID_EDITIONS = "root.editions"
         private const val MENU_ID_LIVESETS = "root.livesets"
+        private const val MENU_ID_SETTINGS = "root.settings"
+        // => Actions
+        private const val ACTION_REFRESH_LIVESETS = "settings.refresh"
 
         // Item types
         private const val TYPE_EDITION = "edition"
@@ -43,6 +46,8 @@ data class CustomMediaId(
         val ROOT = CustomMediaId(MENU_ID_ROOT)
         val ROOT_EDITIONS = CustomMediaId(MENU_ID_EDITIONS)
         val ROOT_LIVESETS = CustomMediaId(MENU_ID_LIVESETS)
+        val ROOT_SETTINGS = CustomMediaId(MENU_ID_SETTINGS)
+        val SETTINGS_REFRESH = CustomMediaId(ACTION_REFRESH_LIVESETS)
 
         /**
          * Parse the Media ID into a [CustomMediaId] object.
@@ -53,6 +58,8 @@ data class CustomMediaId(
             if (mediaId == MENU_ID_ROOT) return ROOT
             if (mediaId == MENU_ID_EDITIONS) return ROOT_EDITIONS
             if (mediaId == MENU_ID_LIVESETS) return ROOT_LIVESETS
+            if (mediaId == MENU_ID_SETTINGS) return ROOT_SETTINGS
+            if (mediaId == ACTION_REFRESH_LIVESETS) return SETTINGS_REFRESH
 
             // Check if we're a ID'd type
             val typeAndIds = mediaId.split(':', limit = 2)

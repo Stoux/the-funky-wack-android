@@ -20,8 +20,27 @@ class LibraryManager @Inject constructor(
     private val sessionSettings: SessionSettings,
 ) {
 
+    private var lastRefreshTimeMs: Long = 0L
+
     suspend fun init() {
         editionRepository.refreshEditions()
+        lastRefreshTimeMs = System.currentTimeMillis()
+    }
+
+    /**
+     * Refresh editions if the data is stale (older than [maxAgeMinutes]).
+     * Useful for auto-refreshing when Automotive reconnects after car wake.
+     * @return true if a refresh was triggered, false if data was fresh
+     */
+    suspend fun refreshIfStale(maxAgeMinutes: Int = 720): Boolean {
+        val ageMs = System.currentTimeMillis() - lastRefreshTimeMs
+        val maxAgeMs = maxAgeMinutes * 60 * 1000L
+        return if (ageMs > maxAgeMs) {
+            init()
+            true
+        } else {
+            false
+        }
     }
 
     /**
@@ -58,6 +77,7 @@ class LibraryManager @Inject constructor(
             mediaId == CustomMediaId.ROOT -> getRootChildren()
             mediaId == CustomMediaId.ROOT_EDITIONS -> getEditions(page, pageSize)
             mediaId == CustomMediaId.ROOT_LIVESETS -> getAllLivesets(page, pageSize)
+            mediaId == CustomMediaId.ROOT_SETTINGS -> getSettings(page, pageSize)
 
             // Show items inside another item
             mediaId.isEdition() -> getEditionLivesets(mediaId, page, pageSize)
@@ -71,6 +91,24 @@ class LibraryManager @Inject constructor(
         return listOf(
             browsableMediaItem(CustomMediaId.ROOT_EDITIONS, "Editions"),
             browsableMediaItem(CustomMediaId.ROOT_LIVESETS, "All livesets"),
+            browsableMediaItem(CustomMediaId.ROOT_SETTINGS, "Settings"),
+        )
+    }
+
+    fun getRootChildrenCount(): Int = 3 // Editions, All livesets, Settings
+
+    private fun getSettings(page: Int, pageSize: Int): List<MediaItem> {
+        return listOf(
+            MediaItem.Builder()
+                .setMediaId(CustomMediaId.SETTINGS_REFRESH.original)
+                .setMediaMetadata(
+                    MediaMetadata.Builder()
+                        .setTitle("Refresh livesets")
+                        .setIsBrowsable(false)
+                        .setIsPlayable(true)
+                        .build()
+                )
+                .build()
         )
     }
 

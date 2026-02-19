@@ -94,11 +94,11 @@ class MediaPlaybackService : MediaLibraryService() {
         // Add listener
         trackManagerUnbindCallback = trackManager.bind(TrackListener())
 
-        // When service starts: refresh the editions & notify the session that it's root options have changed
+        // When service starts: refresh the editions & notify the session that its root options have changed
         serviceIOScope.launch {
             libraryManager.init()
             serviceMainScope.launch {
-                mediaLibrarySession?.notifyChildrenChanged("root", 2, null)
+                mediaLibrarySession?.notifyChildrenChanged(CustomMediaId.ROOT.original, libraryManager.getRootChildrenCount(), null)
             }
         }
 
@@ -180,6 +180,18 @@ class MediaPlaybackService : MediaLibraryService() {
             session: MediaSession,
             controller: MediaSession.ControllerInfo
         ): MediaSession.ConnectionResult {
+            // Auto-refresh if data is stale (e.g., car woke up from sleep), but not while playing
+            if (!playerManager.currentPlayer().isPlaying) {
+                serviceIOScope.launch {
+                    val refreshed = libraryManager.refreshIfStale()
+                    if (refreshed) {
+                        serviceMainScope.launch {
+                            mediaLibrarySession?.notifyChildrenChanged(CustomMediaId.ROOT.original, libraryManager.getRootChildrenCount(), null)
+                        }
+                    }
+                }
+            }
+
             val parent = super.onConnect(session, controller)
             val commands = parent.availableSessionCommands.buildUpon()
                 .add(commandPreviousTrack)
@@ -267,7 +279,19 @@ class MediaPlaybackService : MediaLibraryService() {
                         Log.e("MediaPlaybackService", "Playback service received multiple Media items to play? Unsupported! IDs: ${mediaItems.joinToString { it.mediaId }}")
                     }
 
-                    resolveQueue(CustomMediaId.from(mediaItems[0].mediaId))
+                    val customId = CustomMediaId.from(mediaItems[0].mediaId)
+                    if (customId == CustomMediaId.SETTINGS_REFRESH) {
+                        // Trigger a refresh of livesets/editions but do not open the player UI; cancel the add request
+                        serviceIOScope.launch {
+                            runCatching { libraryManager.init() }
+                            serviceMainScope.launch {
+                                mediaLibrarySession?.notifyChildrenChanged(CustomMediaId.ROOT.original, libraryManager.getRootChildrenCount(), null)
+                            }
+                        }
+                        return Futures.immediateCancelledFuture()
+                    } else {
+                        resolveQueue(customId)
+                    }
                 }
                 else -> emptyList()
             }
