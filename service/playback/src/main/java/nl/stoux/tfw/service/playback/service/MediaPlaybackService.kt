@@ -19,17 +19,21 @@ import androidx.media3.session.SessionResult
 import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
+import com.google.common.util.concurrent.SettableFuture
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import nl.stoux.tfw.service.playback.player.PlayerManager
 import nl.stoux.tfw.service.playback.service.manager.LivesetTrackListener
 import nl.stoux.tfw.service.playback.service.manager.LivesetTrackManager
 import nl.stoux.tfw.service.playback.service.manager.UnbindCallback
+import nl.stoux.tfw.service.playback.service.queue.QueueManager
 import nl.stoux.tfw.service.playback.service.resume.PlaybackResumeCoordinator
+import nl.stoux.tfw.service.playback.service.resume.PlaybackStateRepository
 import nl.stoux.tfw.service.playback.service.session.CustomMediaId
 import nl.stoux.tfw.service.playback.service.session.LibraryManager
 import javax.inject.Inject
@@ -47,6 +51,10 @@ class MediaPlaybackService : MediaLibraryService() {
     @Inject lateinit var trackManager: LivesetTrackManager
 
     @Inject lateinit var resumeCoordinator: PlaybackResumeCoordinator
+
+    @Inject lateinit var playbackStateRepository: PlaybackStateRepository
+
+    @Inject lateinit var queueManager: QueueManager
 
     private var mediaLibrarySession: MediaLibrarySession? = null
 
@@ -199,6 +207,53 @@ class MediaPlaybackService : MediaLibraryService() {
                 .build()
 
             return MediaSession.ConnectionResult.accept(commands, MediaSession.ConnectionResult.DEFAULT_PLAYER_COMMANDS)
+        }
+
+        /**
+         * Called by Android Automotive/Auto when the user presses play on the resumption card.
+         * This is the proper hook for playback resumption - restores the last played liveset.
+         * Uses QueueManager to ensure queue state is properly synchronized.
+         */
+        @OptIn(UnstableApi::class)
+        override fun onPlaybackResumption(
+            mediaSession: MediaSession,
+            controller: MediaSession.ControllerInfo
+        ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> {
+            val future = SettableFuture.create<MediaSession.MediaItemsWithStartPosition>()
+            serviceIOScope.launch {
+                try {
+                    val lastState = playbackStateRepository.lastState().firstOrNull()
+                    if (lastState == null || lastState.mediaId.isEmpty()) {
+                        future.setException(IllegalStateException("No playback state to resume"))
+                        return@launch
+                    }
+
+                    val mediaId = CustomMediaId.from(lastState.mediaId)
+                    val livesetId = mediaId.getLivesetId()
+                    if (livesetId == null) {
+                        future.setException(IllegalStateException("Invalid media ID for resumption"))
+                        return@launch
+                    }
+
+                    // Build the queue via QueueManager to keep state in sync (includes manual queue)
+                    val result = queueManager.buildContextForResumption(livesetId)
+                    if (result == null) {
+                        future.setException(IllegalStateException("No playable items found for resumption"))
+                        return@launch
+                    }
+
+                    val (mediaItems, startIndex) = result
+                    future.set(MediaSession.MediaItemsWithStartPosition(
+                        mediaItems,
+                        startIndex,
+                        lastState.positionMs
+                    ))
+                } catch (e: Exception) {
+                    Log.e("MediaPlaybackService", "Failed to resume playback", e)
+                    future.setException(e)
+                }
+            }
+            return future
         }
 
         override fun onCustomCommand(

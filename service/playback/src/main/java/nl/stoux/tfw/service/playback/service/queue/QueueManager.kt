@@ -275,6 +275,47 @@ class QueueManager @Inject constructor(
             }
         }
     }
+
+    /**
+     * Build the context queue for resumption without applying to player.
+     * Used by onPlaybackResumption to return items to Media3 while keeping QueueManager state in sync.
+     * @return Triple of (mediaItems, startIndex, effectiveQueue) or null if liveset not found
+     */
+    suspend fun buildContextForResumption(livesetId: Long): Pair<List<MediaItem>, Int>? {
+        // Resolve the list of context liveset IDs
+        val contextLivesetIds: List<Long> = try {
+            val lwd = withContext(Dispatchers.IO) { editionRepository.findLiveset(livesetId).first() }
+            val editionId = lwd?.liveset?.editionId
+            if (editionId != null) {
+                val livesets = withContext(Dispatchers.IO) { editionRepository.getLivesets(editionId = editionId).first() }
+                livesets.map { it.liveset.id }
+            } else {
+                listOf(livesetId)
+            }
+        } catch (_: Throwable) {
+            listOf(livesetId)
+        }
+
+        // Resolve all items
+        val resolved = withContext(Dispatchers.IO) {
+            contextLivesetIds.mapNotNull { id -> resolveQueueItem(id, manualEntryId = null) }
+        }
+        if (resolved.isEmpty()) return null
+
+        // Update internal state (context lane) without applying to player
+        mutex.withLock {
+            context.clear()
+            context.addAll(resolved)
+            rebuildEffectiveLocked(livesetId)
+        }
+
+        // Build the effective media items and find start index
+        val effective = _state.value.effective
+        val mediaItems = effective.map { it.mediaItem }
+        val startIndex = effective.indexOfFirst { it.livesetId == livesetId }.coerceAtLeast(0)
+
+        return Pair(mediaItems, startIndex)
+    }
     
     private suspend fun resolveQueueItem(livesetId: Long, manualEntryId: Long? = null): QueueItem? {
         val lwd = withContext(Dispatchers.IO) { editionRepository.findLiveset(livesetId).first() }
