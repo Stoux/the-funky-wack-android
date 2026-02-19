@@ -59,8 +59,9 @@ fun LivesetTrackDto.toTrackEntity(): TrackEntity = TrackEntity(
 private fun EditionDto.selectOptimizedPosterUrl(): String? {
     val set = poster_srcset_urls
     if (!set.isNullOrEmpty()) {
-        // Prefer width 1500 if available, else take the largest available
-        val preferred = set.firstOrNull { it.width == 1500 } ?: set.maxByOrNull(SrcsetDto::width)
+        // Pick the largest size <= 1000px, or fall back to largest available
+        val preferred = set.filter { it.width <= 1000 }.maxByOrNull(SrcsetDto::width)
+            ?: set.maxByOrNull(SrcsetDto::width)
         preferred?.url?.let { return it }
     }
     // Fallback to original poster_url if no srcset

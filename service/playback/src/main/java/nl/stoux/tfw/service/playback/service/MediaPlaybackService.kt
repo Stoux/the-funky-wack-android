@@ -10,6 +10,8 @@ import android.content.res.Configuration
 import androidx.annotation.OptIn
 import androidx.media3.common.MediaItem
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.DataSourceBitmapLoader
+import androidx.media3.session.CacheBitmapLoader
 import androidx.media3.session.CommandButton
 import androidx.media3.session.LibraryResult
 import androidx.media3.session.MediaLibraryService
@@ -87,10 +89,12 @@ class MediaPlaybackService : MediaLibraryService() {
             null
         }
 
-        // Build the session
+        // Build the session with a BitmapLoader for remote artwork (needed for Automotive album art)
+        val bitmapLoader = CacheBitmapLoader(DataSourceBitmapLoader(this))
         val sessionBuilder = MediaLibrarySession.Builder(this, player, SessionCallback())
             .setId("tfw-media-session")
             .setCustomLayout(buildCustomLayout(false, false))
+            .setBitmapLoader(bitmapLoader)
         if (sessionActivityPendingIntent != null) {
             sessionBuilder.setSessionActivity(sessionActivityPendingIntent)
         }
