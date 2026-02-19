@@ -87,7 +87,11 @@ class PlaybackResumeCoordinator @Inject constructor(
         if (last.mediaId.isEmpty()) return
 
         try {
-            // Don't do anything if something else already set the player
+            // Don't do anything if user already initiated playback or player has content
+            if (queueManager.hasUserInitiatedPlayback()) {
+                Log.d("PlaybackResume", "Skipping restore: user already initiated playback")
+                return
+            }
             withContext(Dispatchers.Main) {
                 if (player.currentMediaItem != null) return@withContext
             }

@@ -19,6 +19,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.first
 import nl.stoux.tfw.core.common.database.dao.ManualQueueDao
 import nl.stoux.tfw.core.common.database.entity.ManualQueueItemEntity
+import nl.stoux.tfw.core.common.database.entity.artworkUrl
 import nl.stoux.tfw.core.common.repository.EditionRepository
 import nl.stoux.tfw.service.playback.player.PlayerManager
 import nl.stoux.tfw.service.playback.service.session.CustomMediaId
@@ -42,6 +43,10 @@ class QueueManager @Inject constructor(
 
     private val _state = MutableStateFlow(QueueState())
     val state: StateFlow<QueueState> = _state
+
+    // Flag to track if a user-initiated action has set the queue (prevents restore from overwriting)
+    @Volatile
+    private var userInitiatedPlayback = false
 
     // In-memory lanes
     private val manual = mutableListOf<QueueItem>()
@@ -212,6 +217,12 @@ class QueueManager @Inject constructor(
     // endregion
 
     /**
+     * Check if a user-initiated playback action has occurred.
+     * Used by PlaybackResumeCoordinator to avoid overwriting user selections.
+     */
+    fun hasUserInitiatedPlayback(): Boolean = userInitiatedPlayback
+
+    /**
      * Build and set the context queue based on the provided liveset.
      * Typically includes all livesets from the same edition, starting at the given liveset.
      * If repository lookup fails, falls back to a single-item context.
@@ -220,6 +231,10 @@ class QueueManager @Inject constructor(
      * @param autoplay Whether to start playback immediately after applying.
      */
     fun setContextFromLiveset(livesetId: Long, startPositionMs: Long? = null, autoplay: Boolean = true) {
+        // Mark that user initiated playback (prevents restore from overwriting)
+        if (autoplay) {
+            userInitiatedPlayback = true
+        }
         scope.launch {
             // Resolve the list of context liveset IDs
             val contextLivesetIds: List<Long> = try {
@@ -320,13 +335,25 @@ class QueueManager @Inject constructor(
     private suspend fun resolveQueueItem(livesetId: Long, manualEntryId: Long? = null): QueueItem? {
         val lwd = withContext(Dispatchers.IO) { editionRepository.findLiveset(livesetId).first() }
         val ls = lwd?.liveset ?: return null
+        val edition = lwd.edition
         val url = ls.losslessUrl ?: ls.hqUrl ?: ls.lqUrl
         if (url.isNullOrBlank()) return null
         val mediaId = CustomMediaId.forEntity(ls).original
         val instanceId = java.util.UUID.randomUUID().toString()
+
+        // Build artwork URI from edition if available
+        val artworkUri = edition?.artworkUrl?.let { android.net.Uri.parse(it) }
+
+        val metadata = MediaMetadata.Builder()
+            .setTitle(ls.title)
+            .setArtist(ls.artistName)
+            .setArtworkUri(artworkUri)
+            .build()
+
         val base = MediaItem.Builder()
             .setMediaId(mediaId)
             .setUri(url)
+            .setMediaMetadata(metadata)
             .build()
         val withExtras = base.withQueueExtras(instanceId = instanceId, manualEntryId = manualEntryId)
         return QueueItem(livesetId = livesetId, mediaItem = withExtras, manualEntryId = manualEntryId, instanceId = instanceId)
