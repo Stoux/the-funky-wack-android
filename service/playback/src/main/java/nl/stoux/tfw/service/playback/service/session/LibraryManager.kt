@@ -240,10 +240,20 @@ class LibraryManager @Inject constructor(
     private fun livesetMediaItem(
         lwd: LivesetWithDetails,
         showEditionInfo: Boolean = false,
-    ) : MediaItem {
-        val mediaId = CustomMediaId.forEntity(lwd.liveset)
+    ): MediaItem {
+        // Use centralized builder for consistent MediaItem construction
+        return PlayableMediaItemBuilder.build(lwd, showEditionInfo)
+            ?: fallbackNonPlayableMediaItem(lwd, showEditionInfo)
+    }
 
-        // Append edition information to title/artist when shown in big overall list
+    /**
+     * Fallback for livesets without playable URLs (browse-only).
+     */
+    private fun fallbackNonPlayableMediaItem(
+        lwd: LivesetWithDetails,
+        showEditionInfo: Boolean,
+    ): MediaItem {
+        val mediaId = CustomMediaId.forEntity(lwd.liveset)
         var title = lwd.liveset.title
         var artist = lwd.liveset.artistName
         if (showEditionInfo) {
@@ -251,23 +261,8 @@ class LibraryManager @Inject constructor(
             artist = "TFW #${lwd.edition.number} - $artist"
         }
 
-        val playableUrl = listOfNotNull(lwd.liveset.hqUrl, lwd.liveset.lqUrl, lwd.liveset.losslessUrl).firstOrNull()
-        val playableUri = playableUrl?.toUri()
-        val mimeType = when (playableUrl?.substringAfterLast('.', missingDelimiterValue = "")?.lowercase()) {
-            "mp3" -> "audio/mpeg"
-            "m4a", "mp4" -> "audio/mp4"
-            "aac" -> "audio/aac"
-            "flac" -> "audio/flac"
-            "wav" -> "audio/wav"
-            "ogg", "oga" -> "audio/ogg"
-            "opus" -> "audio/webm"
-            else -> null
-        }
-
         return MediaItem.Builder()
             .setMediaId(mediaId.original)
-            .setUri(playableUri)
-            .setMimeType(mimeType)
             .setMediaMetadata(
                 MediaMetadata.Builder()
                     .setTitle(title)
@@ -275,8 +270,8 @@ class LibraryManager @Inject constructor(
                     .setTrackNumber(lwd.liveset.lineupOrder)
                     .setAlbumTitle("TFW #${lwd.edition.number}: ${lwd.edition.tagLine}")
                     .setArtworkUri(lwd.edition.artworkUrl?.toUri())
-                    .setIsBrowsable(lwd.tracks.firstOrNull{ it.timestampSec != null } != null)
-                    .setIsPlayable(playableUrl != null)
+                    .setIsBrowsable(lwd.tracks.any { it.timestampSec != null })
+                    .setIsPlayable(false)
                     .build()
             )
             .build()

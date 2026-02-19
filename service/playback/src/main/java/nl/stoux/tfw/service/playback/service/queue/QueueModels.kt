@@ -37,11 +37,12 @@ fun MediaItem.withQueueExtras(instanceId: String, manualEntryId: Long?): MediaIt
     val currentExtras: Bundle = this.mediaMetadata.extras ?: Bundle()
     currentExtras.putString(QueueExtrasKeys.INSTANCE_ID, instanceId)
     if (manualEntryId != null) currentExtras.putLong(QueueExtrasKeys.MANUAL_ENTRY_ID, manualEntryId)
-    val meta = MediaMetadata.Builder()
+
+    // Preserve all existing metadata and just add the extras
+    val meta = this.mediaMetadata.buildUpon()
         .setExtras(currentExtras)
-        .setTitle(this.mediaMetadata.title)
-        .setArtist(this.mediaMetadata.artist)
         .build()
+
     return this.buildUpon()
         .setMediaMetadata(meta)
         .build()

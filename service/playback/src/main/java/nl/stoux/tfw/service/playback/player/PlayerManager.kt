@@ -1,6 +1,7 @@
 package nl.stoux.tfw.service.playback.player
 
 import android.content.Context
+import android.util.Log
 import androidx.annotation.OptIn
 import androidx.media3.cast.CastPlayer
 import androidx.media3.cast.DefaultMediaItemConverter
@@ -18,6 +19,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import nl.stoux.tfw.service.playback.di.PlayerFactory
 import javax.inject.Inject
 import javax.inject.Singleton
+
+private const val TAG = "PlayerManager"
 
 /**
  * Minimal PlayerManager for MVP: wraps a local ExoPlayer and exposes it as a StateFlow<Player>.
@@ -82,13 +85,18 @@ class PlayerManager @Inject constructor(
 
     @OptIn(UnstableApi::class)
     private fun switchToCast(session: CastSession) {
+        Log.d(TAG, "Switching to Cast player...")
         val old = _activePlayer.value ?: playerFactory.create().also { _activePlayer.value = it }
-        val ctx = castContext ?: return
+        val ctx = castContext ?: run {
+            Log.e(TAG, "switchToCast: CastContext is null, cannot switch")
+            return
+        }
         val newCastPlayer = CastPlayer(ctx, DefaultMediaItemConverter())
         transferPlaybackState(old, newCastPlayer)
         _activePlayer.value = newCastPlayer
         castPlayer = newCastPlayer
         _isCasting.value = true
+        Log.d(TAG, "Switched to CastPlayer successfully")
         // Pause the old local player
         (old as? ExoPlayer)?.let { exo ->
             runCatching { exo.pause() }
@@ -97,6 +105,7 @@ class PlayerManager @Inject constructor(
 
     @OptIn(UnstableApi::class)
     private fun switchToLocal() {
+        Log.d(TAG, "Switching back to local player...")
         val oldCast = castPlayer
         val local = when (val p = _activePlayer.value) {
             is ExoPlayer -> p
@@ -104,15 +113,22 @@ class PlayerManager @Inject constructor(
         }
         if (oldCast != null) {
             transferPlaybackState(oldCast, local)
-            runCatching { oldCast.release() }
+            runCatching { oldCast.release() }.onFailure {
+                Log.w(TAG, "Failed to release CastPlayer", it)
+            }
         }
         _activePlayer.value = local
         castPlayer = null
         _isCasting.value = false
+        Log.d(TAG, "Switched to local ExoPlayer successfully")
     }
 
     @OptIn(UnstableApi::class)
     private fun transferPlaybackState(from: Player, to: Player) {
+        val fromType = from.javaClass.simpleName
+        val toType = to.javaClass.simpleName
+        Log.d(TAG, "Transferring playback state from $fromType to $toType")
+
         runCatching {
             val itemCount = from.mediaItemCount
             if (itemCount > 0) {
@@ -120,10 +136,23 @@ class PlayerManager @Inject constructor(
                 val index = from.currentMediaItemIndex.coerceIn(0, items.size - 1)
                 val position = from.currentPosition.coerceAtLeast(0L)
                 val playWhenReady = from.playWhenReady
+
+                Log.d(TAG, "Transfer: $itemCount items, index=$index, position=${position}ms, playWhenReady=$playWhenReady")
+
+                // Log first item details for debugging
+                items.firstOrNull()?.let { item ->
+                    Log.d(TAG, "First item: mediaId=${item.mediaId}, uri=${item.localConfiguration?.uri}, mimeType=${item.localConfiguration?.mimeType}")
+                }
+
                 to.setMediaItems(items, index, position)
                 to.prepare()
                 to.playWhenReady = playWhenReady
+                Log.d(TAG, "Transfer completed successfully")
+            } else {
+                Log.d(TAG, "No items to transfer")
             }
+        }.onFailure { e ->
+            Log.e(TAG, "Failed to transfer playback state from $fromType to $toType", e)
         }
     }
 

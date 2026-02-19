@@ -1,28 +1,26 @@
 package nl.stoux.tfw.service.playback.service.queue
 
-import android.util.Log
 import android.os.Looper
+import android.util.Log
 import androidx.media3.common.MediaItem
-import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
-import dagger.hilt.android.scopes.ServiceScoped
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.flow.first
 import nl.stoux.tfw.core.common.database.dao.ManualQueueDao
 import nl.stoux.tfw.core.common.database.entity.ManualQueueItemEntity
-import nl.stoux.tfw.core.common.database.entity.artworkUrl
 import nl.stoux.tfw.core.common.repository.EditionRepository
 import nl.stoux.tfw.service.playback.player.PlayerManager
 import nl.stoux.tfw.service.playback.service.session.CustomMediaId
+import nl.stoux.tfw.service.playback.service.session.PlayableMediaItemBuilder
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -52,6 +50,9 @@ class QueueManager @Inject constructor(
     private val manual = mutableListOf<QueueItem>()
     private val context = mutableListOf<QueueItem>()
 
+    // Track the currently bound player for listener management
+    private var boundPlayer: Player? = null
+
     init {
         // Load manual queue from DB
         ioScope.launch {
@@ -67,10 +68,28 @@ class QueueManager @Inject constructor(
             applyToPlayerSafely()
         }
 
-        // Observe player callbacks minimally
-        playerManager.currentPlayer().addListener(this)
-        // Ensure player repeat is ALL so MediaSession transport (e.g., notification) wraps on Next/Prev
-        playerManager.currentPlayer().repeatMode = Player.REPEAT_MODE_ALL
+        // Observe player callbacks and rebind when player changes (e.g., switching to/from CastPlayer)
+        val initialPlayer = playerManager.currentPlayer()
+        boundPlayer = initialPlayer
+        initialPlayer.addListener(this)
+        initialPlayer.repeatMode = Player.REPEAT_MODE_ALL
+
+        scope.launch {
+            playerManager.activePlayer.collect { newPlayer ->
+                val oldPlayer = boundPlayer
+                if (newPlayer != null && newPlayer !== oldPlayer) {
+                    // Detach from old player
+                    oldPlayer?.removeListener(this@QueueManager)
+
+                    // Attach to new player
+                    boundPlayer = newPlayer
+                    newPlayer.addListener(this@QueueManager)
+                    newPlayer.repeatMode = Player.REPEAT_MODE_ALL
+
+                    Log.d("QueueManager", "Switched listener to new player: ${newPlayer.javaClass.simpleName}")
+                }
+            }
+        }
     }
 
     // region Public API (minimal)
@@ -334,28 +353,13 @@ class QueueManager @Inject constructor(
     
     private suspend fun resolveQueueItem(livesetId: Long, manualEntryId: Long? = null): QueueItem? {
         val lwd = withContext(Dispatchers.IO) { editionRepository.findLiveset(livesetId).first() }
-        val ls = lwd?.liveset ?: return null
-        val edition = lwd.edition
-        val url = ls.losslessUrl ?: ls.hqUrl ?: ls.lqUrl
-        if (url.isNullOrBlank()) return null
-        val mediaId = CustomMediaId.forEntity(ls).original
+            ?: return null
+
+        // Use centralized builder for consistent MediaItem construction (incl. MIME type)
+        val baseMediaItem = PlayableMediaItemBuilder.build(lwd) ?: return null
+
         val instanceId = java.util.UUID.randomUUID().toString()
-
-        // Build artwork URI from edition if available
-        val artworkUri = edition?.artworkUrl?.let { android.net.Uri.parse(it) }
-
-        val metadata = MediaMetadata.Builder()
-            .setTitle(ls.title)
-            .setArtist(ls.artistName)
-            .setArtworkUri(artworkUri)
-            .build()
-
-        val base = MediaItem.Builder()
-            .setMediaId(mediaId)
-            .setUri(url)
-            .setMediaMetadata(metadata)
-            .build()
-        val withExtras = base.withQueueExtras(instanceId = instanceId, manualEntryId = manualEntryId)
+        val withExtras = baseMediaItem.withQueueExtras(instanceId = instanceId, manualEntryId = manualEntryId)
         return QueueItem(livesetId = livesetId, mediaItem = withExtras, manualEntryId = manualEntryId, instanceId = instanceId)
     }
 

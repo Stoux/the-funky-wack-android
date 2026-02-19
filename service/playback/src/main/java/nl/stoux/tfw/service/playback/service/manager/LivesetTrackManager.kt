@@ -126,15 +126,27 @@ class LivesetTrackManager @Inject constructor(
     }
 
     fun toPreviousTrack() {
-        val previousTrack = currentTrackSection?.prev
-        if (previousTrack == null) return
-        boundPlayer?.let { p -> p.seekTo(p.currentMediaItemIndex, previousTrack.startAt) }
+        val previousTrack = currentTrackSection?.prev ?: return
+        val player = boundPlayer ?: return
+
+        // Optimistically update UI state before seek (important for Cast where seek is async)
+        currentTrackSection = previousTrack
+        listenersUpdater.onTrackChanged(previousTrack)
+        listenersUpdater.onTimeProgress(previousTrack.startAt, player.duration)
+
+        player.seekTo(player.currentMediaItemIndex, previousTrack.startAt)
     }
 
     fun toNextTrack() {
-        val nextTrack = currentTrackSection?.next
-        if (nextTrack == null) return
-        boundPlayer?.let { p -> p.seekTo(p.currentMediaItemIndex, nextTrack.startAt) }
+        val nextTrack = currentTrackSection?.next ?: return
+        val player = boundPlayer ?: return
+
+        // Optimistically update UI state before seek (important for Cast where seek is async)
+        currentTrackSection = nextTrack
+        listenersUpdater.onTrackChanged(nextTrack)
+        listenersUpdater.onTimeProgress(nextTrack.startAt, player.duration)
+
+        player.seekTo(player.currentMediaItemIndex, nextTrack.startAt)
     }
 
     override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
@@ -218,15 +230,18 @@ class LivesetTrackManager @Inject constructor(
         // If there are no timestamped tracks for this liveset, ensure base metadata is set and exit
         val hasTimestampedTracks = liveset.tracks.any { it.timestampSec != null }
         if (!hasTimestampedTracks) {
-            val baseUpdated = mediaItem.buildUpon()
-                .setMediaMetadata(
-                    mediaItem.mediaMetadata.buildUpon()
-                        .setTitle(liveset.liveset.title)
-                        .setArtist(liveset.liveset.artistName)
-                        .build()
-                )
-                .build()
-            player.replaceMediaItem(player.currentMediaItemIndex, baseUpdated)
+            // Only update player metadata when NOT casting (CastPlayer has limited replaceMediaItem support)
+            if (!playerManager.isCasting.value) {
+                val baseUpdated = mediaItem.buildUpon()
+                    .setMediaMetadata(
+                        mediaItem.mediaMetadata.buildUpon()
+                            .setTitle(liveset.liveset.title)
+                            .setArtist(liveset.liveset.artistName)
+                            .build()
+                    )
+                    .build()
+                player.replaceMediaItem(player.currentMediaItemIndex, baseUpdated)
+            }
             listenersUpdater.onTrackChanged(null)
             listenersUpdater.onNextPrevTrackStatusChanged(hasPreviousTrack = false, hasNextTrack = false)
             return
@@ -263,17 +278,21 @@ class LivesetTrackManager @Inject constructor(
             title = track.title
         }
 
-        // Swap the state in the player
-        val updatedMediaItem = mediaItem.buildUpon()
-            .setMediaMetadata(
-                mediaItem.mediaMetadata.buildUpon()
-                    .setTitle(title)
-                    .setArtist(artist)
-                    .build()
-            )
-            .build()
+        // Only update player metadata when NOT casting.
+        // CastPlayer has limited support for replaceMediaItem and may cause issues.
+        // When casting, the Cast receiver shows the liveset info anyway.
+        if (!playerManager.isCasting.value) {
+            val updatedMediaItem = mediaItem.buildUpon()
+                .setMediaMetadata(
+                    mediaItem.mediaMetadata.buildUpon()
+                        .setTitle(title)
+                        .setArtist(artist)
+                        .build()
+                )
+                .build()
 
-        player.replaceMediaItem(player.currentMediaItemIndex, updatedMediaItem)
+            player.replaceMediaItem(player.currentMediaItemIndex, updatedMediaItem)
+        }
     }
 
     private inner class PlayingProgressReporter(
