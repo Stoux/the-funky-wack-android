@@ -132,9 +132,14 @@ class LivesetTrackManager @Inject constructor(
         // Optimistically update UI state before seek (important for Cast where seek is async)
         currentTrackSection = previousTrack
         listenersUpdater.onTrackChanged(previousTrack)
-        listenersUpdater.onTimeProgress(previousTrack.startAt, player.duration)
+        val duration = player.duration.takeIf { it > 0 }
+        listenersUpdater.onTimeProgress(previousTrack.startAt, duration)
 
-        player.seekTo(player.currentMediaItemIndex, previousTrack.startAt)
+        runCatching {
+            player.seekTo(player.currentMediaItemIndex, previousTrack.startAt)
+        }.onFailure {
+            Log.e("LivesetTrackManager", "Failed to seek to previous track", it)
+        }
     }
 
     fun toNextTrack() {
@@ -144,9 +149,14 @@ class LivesetTrackManager @Inject constructor(
         // Optimistically update UI state before seek (important for Cast where seek is async)
         currentTrackSection = nextTrack
         listenersUpdater.onTrackChanged(nextTrack)
-        listenersUpdater.onTimeProgress(nextTrack.startAt, player.duration)
+        val duration = player.duration.takeIf { it > 0 }
+        listenersUpdater.onTimeProgress(nextTrack.startAt, duration)
 
-        player.seekTo(player.currentMediaItemIndex, nextTrack.startAt)
+        runCatching {
+            player.seekTo(player.currentMediaItemIndex, nextTrack.startAt)
+        }.onFailure {
+            Log.e("LivesetTrackManager", "Failed to seek to next track", it)
+        }
     }
 
     override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {

@@ -27,7 +27,7 @@ class PlayerFactory @Inject constructor(
 
         val player = ExoPlayer.Builder(context)
             .setSeekParameters(SeekParameters.CLOSEST_SYNC)
-            .setWakeMode(C.WAKE_MODE_LOCAL)  /* Prevent the service from being killed during playback */
+            .setWakeMode(C.WAKE_MODE_NETWORK)  /* Keep CPU + WiFi awake during streaming playback */
             .setHandleAudioBecomingNoisy(true)
             .setAudioAttributes(audioAttributes, true)
             .build()
