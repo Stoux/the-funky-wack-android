@@ -30,6 +30,13 @@ class SettingsViewModel @Inject constructor(
             initialValue = AudioQuality.DEFAULT
         )
 
+    val allowLossless: StateFlow<Boolean> = playbackSettings.allowLossless()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false
+        )
+
     fun setBufferMinutes(minutes: Int) {
         viewModelScope.launch {
             playbackSettings.setBufferDurationMinutes(minutes)
@@ -39,6 +46,12 @@ class SettingsViewModel @Inject constructor(
     fun setAudioQuality(quality: AudioQuality) {
         viewModelScope.launch {
             playbackSettings.setAudioQuality(quality)
+        }
+    }
+
+    fun setAllowLossless(allow: Boolean) {
+        viewModelScope.launch {
+            playbackSettings.setAllowLossless(allow)
         }
     }
 }

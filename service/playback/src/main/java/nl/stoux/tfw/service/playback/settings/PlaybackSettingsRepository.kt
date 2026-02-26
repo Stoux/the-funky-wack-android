@@ -2,6 +2,7 @@ package nl.stoux.tfw.service.playback.settings
 
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -21,6 +22,7 @@ class PlaybackSettingsRepository @Inject constructor(
     private object Keys {
         val bufferDurationMinutes = intPreferencesKey("playback::buffer_duration_minutes")
         val audioQuality = stringPreferencesKey("playback::audio_quality")
+        val allowLossless = booleanPreferencesKey("playback::allow_lossless")
     }
 
     companion object {
@@ -63,6 +65,20 @@ class PlaybackSettingsRepository @Inject constructor(
     suspend fun setAudioQuality(quality: AudioQuality) {
         dataStore.edit { prefs ->
             prefs[Keys.audioQuality] = quality.key
+        }
+    }
+
+    /**
+     * Whether lossless (WAV) playback is allowed.
+     * Default is false - WAV files can be ~1GB per set.
+     */
+    fun allowLossless(): Flow<Boolean> = dataStore.data.map { prefs ->
+        prefs[Keys.allowLossless] ?: false
+    }
+
+    suspend fun setAllowLossless(allow: Boolean) {
+        dataStore.edit { prefs ->
+            prefs[Keys.allowLossless] = allow
         }
     }
 }

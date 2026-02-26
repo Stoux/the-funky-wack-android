@@ -273,7 +273,11 @@ class QueueManager @Inject constructor(
         }
         scope.launch {
             // Reset to default quality from settings when starting new playback
-            val defaultQuality = playbackSettings.audioQuality().first()
+            var defaultQuality = playbackSettings.audioQuality().first()
+            // If default is lossless but lossless isn't allowed, fall back to HIGH
+            if (defaultQuality == AudioQuality.LOSSLESS && !playbackSettings.allowLossless().first()) {
+                defaultQuality = AudioQuality.HIGH
+            }
             _currentQuality.value = defaultQuality
             // Resolve the list of context liveset IDs
             val contextLivesetIds: List<Long> = try {

@@ -281,7 +281,9 @@ fun PlayerControls(
     val audioQuality by viewModel.audioQuality.collectAsState()
     val actualQuality by viewModel.actualQuality.collectAsState()
     val availableQualities by viewModel.availableQualities.collectAsState()
+    val allowLossless by viewModel.allowLossless.collectAsState()
     var showQualityDialog by remember { mutableStateOf(false) }
+    var showLosslessConfirmDialog by remember { mutableStateOf(false) }
 
 
     Column(
@@ -601,11 +603,19 @@ fun PlayerControls(
                     AudioQuality.entries.forEach { quality ->
                         val isSelected = quality == (actualQuality ?: audioQuality)
                         val isAvailable = quality in availableQualities
+                        // Lossless requires permission
+                        val needsLosslessPermission = quality == AudioQuality.LOSSLESS && !allowLossless
                         Surface(
                             onClick = {
                                 if (isAvailable) {
-                                    viewModel.setAudioQuality(quality)
-                                    showQualityDialog = false
+                                    if (needsLosslessPermission) {
+                                        // Show lossless confirmation first
+                                        showQualityDialog = false
+                                        showLosslessConfirmDialog = true
+                                    } else {
+                                        viewModel.setAudioQuality(quality)
+                                        showQualityDialog = false
+                                    }
                                 }
                             },
                             color = when {
@@ -620,7 +630,7 @@ fun PlayerControls(
                                 text = when (quality) {
                                     AudioQuality.LOW -> "Low Quality (LQ)"
                                     AudioQuality.HIGH -> "High Quality (HQ)"
-                                    AudioQuality.LOSSLESS -> "Lossless (WAV)"
+                                    AudioQuality.LOSSLESS -> "Lossless (WAV)" + if (needsLosslessPermission && isAvailable) " ⚠️" else ""
                                 },
                                 modifier = Modifier.padding(16.dp),
                                 color = when {
@@ -636,6 +646,39 @@ fun PlayerControls(
             confirmButton = {
                 TextButton(onClick = { showQualityDialog = false }) {
                     Text("Close")
+                }
+            }
+        )
+    }
+
+    // Lossless confirmation dialog
+    if (showLosslessConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { showLosslessConfirmDialog = false },
+            title = { Text("Enable lossless playback?") },
+            text = {
+                Text(
+                    "Lossless WAV files are massive - typically around 1GB per set. " +
+                    "This will use significant data and storage.\n\n" +
+                    "High Quality (HQ) is indistinguishable from lossless for 99% of listeners " +
+                    "and uses a fraction of the bandwidth.\n\n" +
+                    "Are you sure you want to enable lossless playback?"
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.enableLossless()
+                        viewModel.setAudioQuality(AudioQuality.LOSSLESS)
+                        showLosslessConfirmDialog = false
+                    }
+                ) {
+                    Text("Enable & Play")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showLosslessConfirmDialog = false }) {
+                    Text("Cancel")
                 }
             }
         )

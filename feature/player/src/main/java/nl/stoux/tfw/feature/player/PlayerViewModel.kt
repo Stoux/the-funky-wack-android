@@ -99,6 +99,14 @@ class PlayerViewModel @Inject constructor(
     // Actual quality being used (may differ if requested quality isn't available)
     val actualQuality: StateFlow<AudioQuality?> = queueManager.actualQuality
 
+    // Whether lossless is allowed (from settings)
+    val allowLossless: StateFlow<Boolean> = playbackSettings.allowLossless()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false
+        )
+
     // Available qualities based on current liveset
     val availableQualities: StateFlow<Set<AudioQuality>> = _currentLiveset
         .map { liveset ->
@@ -252,6 +260,12 @@ class PlayerViewModel @Inject constructor(
 
     fun setAudioQuality(quality: AudioQuality) {
         queueManager.setQuality(quality)
+    }
+
+    fun enableLossless() {
+        viewModelScope.launch {
+            playbackSettings.setAllowLossless(true)
+        }
     }
 
     private val _showQueue = MutableStateFlow(false)
