@@ -42,6 +42,15 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import nl.stoux.tfw.service.playback.settings.PlaybackSettingsRepository
 import nl.stoux.tfw.service.playback.settings.PlaybackSettingsRepository.AudioQuality
 
+private fun formatBytes(bytes: Long): String {
+    return when {
+        bytes < 1024 -> "$bytes B"
+        bytes < 1024 * 1024 -> "${bytes / 1024} KB"
+        bytes < 1024 * 1024 * 1024 -> String.format("%.1f MB", bytes / (1024.0 * 1024.0))
+        else -> String.format("%.2f GB", bytes / (1024.0 * 1024.0 * 1024.0))
+    }
+}
+
 @Composable
 fun SettingsScreen(
     onBack: () -> Unit,
@@ -50,6 +59,9 @@ fun SettingsScreen(
     val bufferMinutes by viewModel.bufferMinutes.collectAsState()
     val audioQuality by viewModel.audioQuality.collectAsState()
     val allowLossless by viewModel.allowLossless.collectAsState()
+    val offlineMode by viewModel.offlineMode.collectAsState()
+    val preferDownloadedQuality by viewModel.preferDownloadedQuality.collectAsState()
+    val totalDownloadedBytes by viewModel.totalDownloadedBytes.collectAsState()
     var showLosslessConfirmDialog by remember { mutableStateOf(false) }
 
     Column(
@@ -225,6 +237,55 @@ fun SettingsScreen(
                         }
                     }
                 }
+            )
+        }
+
+        Spacer(modifier = Modifier.height(32.dp))
+
+        // Downloads section
+        Text(
+            text = "Downloads",
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.primary
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // Offline mode toggle
+        SettingsRow(
+            title = "Offline mode",
+            description = "Only show and play downloaded livesets"
+        ) {
+            Switch(
+                checked = offlineMode,
+                onCheckedChange = { viewModel.setOfflineMode(it) }
+            )
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Prefer downloaded quality toggle
+        SettingsRow(
+            title = "Always use downloaded quality",
+            description = "Play local files even if lower quality than streaming"
+        ) {
+            Switch(
+                checked = preferDownloadedQuality,
+                onCheckedChange = { viewModel.setPreferDownloadedQuality(it) }
+            )
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Storage usage (read-only)
+        SettingsRow(
+            title = "Storage used",
+            description = "Total space used by downloaded livesets"
+        ) {
+            Text(
+                text = formatBytes(totalDownloadedBytes),
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface
             )
         }
 

@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import nl.stoux.tfw.service.playback.download.DownloadRepository
 import nl.stoux.tfw.service.playback.settings.PlaybackSettingsRepository
 import nl.stoux.tfw.service.playback.settings.PlaybackSettingsRepository.AudioQuality
 import javax.inject.Inject
@@ -14,6 +15,7 @@ import javax.inject.Inject
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val playbackSettings: PlaybackSettingsRepository,
+    private val downloadRepository: DownloadRepository,
 ) : ViewModel() {
 
     val bufferMinutes: StateFlow<Int> = playbackSettings.bufferDurationMinutes()
@@ -37,6 +39,27 @@ class SettingsViewModel @Inject constructor(
             initialValue = false
         )
 
+    val offlineMode: StateFlow<Boolean> = playbackSettings.offlineMode()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false
+        )
+
+    val preferDownloadedQuality: StateFlow<Boolean> = playbackSettings.preferDownloadedQuality()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = true
+        )
+
+    val totalDownloadedBytes: StateFlow<Long> = downloadRepository.totalDownloadedBytes()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = 0L
+        )
+
     fun setBufferMinutes(minutes: Int) {
         viewModelScope.launch {
             playbackSettings.setBufferDurationMinutes(minutes)
@@ -52,6 +75,18 @@ class SettingsViewModel @Inject constructor(
     fun setAllowLossless(allow: Boolean) {
         viewModelScope.launch {
             playbackSettings.setAllowLossless(allow)
+        }
+    }
+
+    fun setOfflineMode(enabled: Boolean) {
+        viewModelScope.launch {
+            playbackSettings.setOfflineMode(enabled)
+        }
+    }
+
+    fun setPreferDownloadedQuality(prefer: Boolean) {
+        viewModelScope.launch {
+            playbackSettings.setPreferDownloadedQuality(prefer)
         }
     }
 }

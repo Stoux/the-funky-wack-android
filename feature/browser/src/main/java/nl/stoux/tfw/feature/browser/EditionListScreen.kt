@@ -14,11 +14,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Divider
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -35,6 +37,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -51,6 +54,7 @@ import nl.stoux.tfw.core.common.database.dao.EditionWithContent
 import nl.stoux.tfw.core.common.database.entity.artworkUrl
 import nl.stoux.tfw.feature.player.util.formatTime
 import nl.stoux.tfw.feature.player.util.shareLiveset
+import nl.stoux.tfw.service.playback.download.DownloadStatus
 import nl.stoux.tfw.service.playback.service.session.CustomMediaId
 
 @Composable
@@ -63,22 +67,56 @@ fun EditionListScreen(
     onAddToQueue: (livesetId: Long) -> Unit,
 ) {
     val editions by viewModel.editions.collectAsState()
+    val downloadStatuses by viewModel.downloadStatuses.collectAsState()
+    val showDownloadDialog by viewModel.showDownloadDialog.collectAsState()
+    val showCellularWarning by viewModel.showCellularWarning.collectAsState()
+    val defaultQuality by viewModel.defaultQuality.collectAsState()
+
     EditionList(
         editions = editions,
+        downloadStatuses = downloadStatuses,
         onPlayClicked = onPlayClicked,
         onOpenPlayer = onOpenPlayer,
         onAddToQueue = onAddToQueue,
+        onDownloadClicked = { viewModel.showDownloadQualityDialog(it) },
+        onCancelDownload = { viewModel.cancelDownload(it) },
+        onDeleteDownload = { viewModel.deleteDownload(it) },
         modifier = modifier
     )
+
+    // Download quality dialog
+    showDownloadDialog?.let { info ->
+        DownloadQualityDialog(
+            livesetTitle = "${info.liveset.liveset.title} - ${info.liveset.liveset.artistName}",
+            qualityOptions = info.qualityOptions,
+            defaultQuality = defaultQuality,
+            onConfirm = { quality ->
+                viewModel.startDownload(info.liveset.liveset.id, quality)
+            },
+            onDismiss = { viewModel.dismissDownloadDialog() }
+        )
+    }
+
+    // Cellular warning dialog
+    if (showCellularWarning) {
+        CellularDownloadWarningDialog(
+            onConfirm = { viewModel.confirmCellularDownload() },
+            onDismiss = { viewModel.cancelCellularWarning() }
+        )
+    }
 }
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun EditionList(
     editions: List<EditionWithContent>,
+    downloadStatuses: Map<Long, DownloadStatus>,
     onPlayClicked: (mediaId: CustomMediaId) -> Unit,
     onOpenPlayer: () -> Unit,
     onAddToQueue: (livesetId: Long) -> Unit,
+    onDownloadClicked: (livesetId: Long) -> Unit,
+    onCancelDownload: (livesetId: Long) -> Unit,
+    onDeleteDownload: (livesetId: Long) -> Unit,
     modifier: Modifier = Modifier
 ) {
     LazyColumn(modifier = modifier.fillMaxSize().padding(vertical = 4.dp)) {
@@ -97,6 +135,7 @@ private fun EditionList(
                 }
             }
             items(edition.livesets, key = { it.liveset.id }) { lwd ->
+                val downloadStatus = downloadStatuses[lwd.liveset.id] ?: DownloadStatus.NotDownloaded
                 LivesetRow(
                     livesetId = lwd.liveset.id,
                     title = lwd.liveset.title,
@@ -104,8 +143,8 @@ private fun EditionList(
                     genre = lwd.liveset.genre,
                     bpm = lwd.liveset.bpm,
                     durationSec = lwd.liveset.durationSeconds,
-                    // TODO: This resolve URL logic should be moved to the model and/or a service which provides the correct URL based on the preferred quality.
                     isPlayable = listOfNotNull(lwd.liveset.losslessUrl, lwd.liveset.hqUrl, lwd.liveset.lqUrl).isNotEmpty(),
+                    downloadStatus = downloadStatus,
                     onPlay = {
                         val mediaId = CustomMediaId.forEntity(lwd.liveset)
                         val url = listOfNotNull(lwd.liveset.losslessUrl, lwd.liveset.hqUrl, lwd.liveset.lqUrl).firstOrNull()
@@ -115,6 +154,9 @@ private fun EditionList(
                         }
                     },
                     onAddToQueueClicked = { onAddToQueue(lwd.liveset.id) },
+                    onDownloadClicked = { onDownloadClicked(lwd.liveset.id) },
+                    onCancelDownload = { onCancelDownload(lwd.liveset.id) },
+                    onDeleteDownload = { onDeleteDownload(lwd.liveset.id) },
                     modifier = Modifier.padding(horizontal = 16.dp)
                 )
                 Divider(color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
@@ -279,8 +321,12 @@ private fun LivesetRow(
     bpm: String?,
     durationSec: Int?,
     isPlayable: Boolean,
+    downloadStatus: DownloadStatus,
     onPlay: () -> Unit,
     onAddToQueueClicked: () -> Unit,
+    onDownloadClicked: () -> Unit,
+    onCancelDownload: () -> Unit,
+    onDeleteDownload: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context: Context = LocalContext.current
@@ -308,11 +354,26 @@ private fun LivesetRow(
 
         // Middle: text stack
         Column(Modifier.weight(1f)) {
-            Text(text = title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
             Text(text = artist, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
             val meta = listOfNotNull(genre, bpm?.let { "${it} BPM" }).joinToString(" · ")
-            if (meta.isNotBlank()) {
-                Text(text = meta, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                if (meta.isNotBlank()) {
+                    Text(text = meta, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                // Download status indicator
+                DownloadStatusIndicator(
+                    status = downloadStatus,
+                    modifier = Modifier.size(18.dp)
+                )
             }
         }
 
@@ -339,6 +400,36 @@ private fun LivesetRow(
                     expanded = menuExpanded.value,
                     onDismissRequest = { menuExpanded.value = false }
                 ) {
+                    // Download action based on status
+                    when (downloadStatus) {
+                        is DownloadStatus.NotDownloaded, is DownloadStatus.Failed -> {
+                            DropdownMenuItem(
+                                text = { Text("Download") },
+                                onClick = {
+                                    onDownloadClicked()
+                                    menuExpanded.value = false
+                                }
+                            )
+                        }
+                        is DownloadStatus.Downloading -> {
+                            DropdownMenuItem(
+                                text = { Text("Cancel Download") },
+                                onClick = {
+                                    onCancelDownload()
+                                    menuExpanded.value = false
+                                }
+                            )
+                        }
+                        is DownloadStatus.Completed -> {
+                            DropdownMenuItem(
+                                text = { Text("Delete Download") },
+                                onClick = {
+                                    onDeleteDownload()
+                                    menuExpanded.value = false
+                                }
+                            )
+                        }
+                    }
                     DropdownMenuItem(
                         text = { Text("Add to Queue") },
                         onClick = {
@@ -355,6 +446,45 @@ private fun LivesetRow(
                     )
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun DownloadStatusIndicator(
+    status: DownloadStatus,
+    modifier: Modifier = Modifier
+) {
+    when (status) {
+        is DownloadStatus.NotDownloaded -> {
+            // No indicator
+        }
+        is DownloadStatus.Downloading -> {
+            CircularProgressIndicator(
+                progress = { status.progress / 100f },
+                modifier = modifier,
+                color = MaterialTheme.colorScheme.primary,
+                strokeWidth = 2.dp,
+                strokeCap = StrokeCap.Round,
+            )
+        }
+        is DownloadStatus.Completed -> {
+            // Download icon indicator
+            Text(
+                text = "↓",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = modifier,
+            )
+        }
+        is DownloadStatus.Failed -> {
+            // Error indicator
+            Text(
+                text = "!",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.error,
+                modifier = modifier,
+            )
         }
     }
 }

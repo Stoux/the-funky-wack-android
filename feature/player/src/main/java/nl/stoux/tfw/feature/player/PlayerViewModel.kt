@@ -30,6 +30,8 @@ import nl.stoux.tfw.service.playback.service.manager.LivesetTrackListener
 import nl.stoux.tfw.service.playback.service.session.CustomMediaId
 import nl.stoux.tfw.service.playback.service.manager.UnbindCallback
 import nl.stoux.tfw.service.playback.service.manager.LivesetTrackManager
+import nl.stoux.tfw.service.playback.download.DownloadRepository
+import nl.stoux.tfw.service.playback.download.DownloadStatus
 import nl.stoux.tfw.service.playback.settings.PlaybackSettingsRepository
 import nl.stoux.tfw.service.playback.settings.PlaybackSettingsRepository.AudioQuality
 import kotlinx.coroutines.flow.SharingStarted
@@ -44,6 +46,7 @@ class PlayerViewModel @Inject constructor(
     private val waveformDownloader: WaveformDownloader,
     private val queueManager: nl.stoux.tfw.service.playback.service.queue.QueueManager,
     private val playbackSettings: PlaybackSettingsRepository,
+    private val downloadRepository: DownloadRepository,
 ) : ViewModel() {
 
     private var controller: MediaController? = null
@@ -73,6 +76,10 @@ class PlayerViewModel @Inject constructor(
 
     private val _isBuffering = MutableStateFlow(false)
     val isBuffering: StateFlow<Boolean> = _isBuffering
+
+    // Track if the current liveset is downloaded (for showing full buffer bar)
+    private val _isCurrentLivesetDownloaded = MutableStateFlow(false)
+    val isCurrentLivesetDownloaded: StateFlow<Boolean> = _isCurrentLivesetDownloaded
 
     private val _waveformPeaks = MutableStateFlow<List<Int>?>(emptyList())
     val waveformPeaks = _waveformPeaks.asStateFlow()
@@ -194,7 +201,12 @@ class PlayerViewModel @Inject constructor(
                         val dur = c.duration.takeIf { it > 0 } ?: _durationMs.value
                         _durationMs.value = dur
                         _progress.value = if (dur > 0) (c.currentPosition.toFloat() / dur.toFloat()).coerceIn(0f, 1f) else null
-                        _bufferedProgress.value = if (dur > 0) (c.bufferedPosition.toFloat() / dur.toFloat()).coerceIn(0f, 1f) else null
+                        // Downloaded content is always fully buffered
+                        _bufferedProgress.value = if (_isCurrentLivesetDownloaded.value) {
+                            1f
+                        } else if (dur > 0) {
+                            (c.bufferedPosition.toFloat() / dur.toFloat()).coerceIn(0f, 1f)
+                        } else null
                     }
                     delay(500)
                 }
@@ -212,7 +224,12 @@ class PlayerViewModel @Inject constructor(
             if (dur > 0) _durationMs.value = dur
             _positionMs.value = c.currentPosition
             _progress.value = if (_durationMs.value > 0) (_positionMs.value.toFloat() / _durationMs.value.toFloat()).coerceIn(0f, 1f) else null
-            _bufferedProgress.value = if (_durationMs.value > 0) (c.bufferedPosition.toFloat() / _durationMs.value.toFloat()).coerceIn(0f, 1f) else null
+            // Downloaded content is always fully buffered
+            _bufferedProgress.value = if (_isCurrentLivesetDownloaded.value) {
+                1f
+            } else if (_durationMs.value > 0) {
+                (c.bufferedPosition.toFloat() / _durationMs.value.toFloat()).coerceIn(0f, 1f)
+            } else null
         }
     }
 
@@ -341,17 +358,64 @@ class PlayerViewModel @Inject constructor(
         override fun onLivesetChanged(liveset: LivesetWithDetails?) {
             _currentLiveset.value = liveset
 
-            // Check if we need to load a new waveform
+            val livesetId = liveset?.liveset?.id
+
+            // Check if current liveset is downloaded
+            if (livesetId != null) {
+                viewModelScope.launch {
+                    downloadRepository.downloadStatus(livesetId).collect { status ->
+                        _isCurrentLivesetDownloaded.value = status is DownloadStatus.Completed
+                    }
+                }
+            } else {
+                _isCurrentLivesetDownloaded.value = false
+            }
+
+            // Load waveform - prefer stored waveform for downloaded livesets
             val waveformUrl = liveset?.liveset?.audioWaveformUrl
-            if (waveformUrl != null) {
+            if (livesetId != null || waveformUrl != null) {
                 // Signal loading state immediately with empty list (tri-state: empty = loading)
                 _waveformPeaks.value = emptyList()
-                waveformDownloader.loadWaveform(waveformUrl) { data ->
-                    _waveformPeaks.value = data
+
+                viewModelScope.launch {
+                    // First try to get stored waveform from download
+                    val storedJson = livesetId?.let { downloadRepository.getWaveformJson(it) }
+                    if (storedJson != null) {
+                        // Parse stored waveform JSON
+                        val peaks = parseWaveformJson(storedJson)
+                        if (peaks != null) {
+                            _waveformPeaks.value = peaks
+                            return@launch
+                        }
+                    }
+
+                    // Fall back to network download
+                    if (waveformUrl != null) {
+                        waveformDownloader.loadWaveform(waveformUrl) { data ->
+                            _waveformPeaks.value = data
+                        }
+                    } else {
+                        _waveformPeaks.value = null
+                    }
                 }
             } else {
                 // Unavailable
                 _waveformPeaks.value = null
+            }
+        }
+
+        private fun parseWaveformJson(json: String): List<Int>? {
+            return try {
+                // Parse JSON format: {"data": [1, 2, 3, ...]}
+                val dataStart = json.indexOf("[")
+                val dataEnd = json.lastIndexOf("]")
+                if (dataStart >= 0 && dataEnd > dataStart) {
+                    val arrayStr = json.substring(dataStart + 1, dataEnd)
+                    arrayStr.split(",")
+                        .map { it.trim().toInt() }
+                } else null
+            } catch (e: Exception) {
+                null
             }
         }
 

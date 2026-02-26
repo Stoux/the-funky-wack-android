@@ -37,6 +37,7 @@ interface EditionRepository {
 class EditionRepositoryImpl @Inject constructor(
     private val api: ApiService,
     private val db: AppDatabase,
+    private val cleanupCallbackHolder: LivesetCleanupCallbackHolder,
 ) : EditionRepository {
 
     private val dao: EditionDao get() = db.editionDao()
@@ -65,29 +66,64 @@ class EditionRepositoryImpl @Inject constructor(
 
     override fun getLivesets(editionId: Long, page: Int, pageSize: Int): Flow<List<LivesetWithDetails>> = dao.getEditionLivesets(editionId, page, pageSize)
 
-    override suspend fun refreshEditions() = withContext(Dispatchers.IO) {
+    override suspend fun refreshEditions(): Unit = withContext(Dispatchers.IO) {
         try {
             val dtos = api.getEditions()
 
-            val editions = mutableListOf<EditionEntity>()
-            val livesets = mutableListOf<LivesetEntity>()
-            val tracks = mutableListOf<TrackEntity>()
+            val newEditions = mutableListOf<EditionEntity>()
+            val newLivesets = mutableListOf<LivesetEntity>()
+            val newTracks = mutableListOf<TrackEntity>()
 
             dtos.forEach { edDto ->
-                editions += edDto.toEditionEntity()
+                newEditions += edDto.toEditionEntity()
                 edDto.livesets.orEmpty().forEach { lsDto ->
-                    livesets += lsDto.toLivesetEntity()
-                    tracks += lsDto.tracks.orEmpty().map { it.toTrackEntity() }
+                    newLivesets += lsDto.toLivesetEntity()
+                    newTracks += lsDto.tracks.orEmpty().map { it.toTrackEntity() }
                 }
             }
 
-            Log.d("TfwDao", "Editions ${editions.size} | Livesets ${livesets.size}")
+            Log.d("TfwDao", "Editions ${newEditions.size} | Livesets ${newLivesets.size}")
 
-            db.withTransaction {
-                dao.replaceAll(editions, livesets, tracks)
+            // Get current IDs from database
+            val existingEditionIds = dao.getAllEditionIds().toSet()
+            val existingLivesetIds = dao.getAllLivesetIds().toSet()
+            val existingTrackIds = dao.getAllTrackIds().toSet()
+
+            // Calculate IDs from API response
+            val apiEditionIds = newEditions.map { it.id }.toSet()
+            val apiLivesetIds = newLivesets.map { it.id }.toSet()
+            val apiTrackIds = newTracks.map { it.id }.toSet()
+
+            // Find items to delete (exist in DB but not in API)
+            val editionsToDelete = existingEditionIds - apiEditionIds
+            val livesetsToDelete = existingLivesetIds - apiLivesetIds
+            val tracksToDelete = existingTrackIds - apiTrackIds
+
+            // Clean up downloads before deleting livesets
+            if (livesetsToDelete.isNotEmpty()) {
+                cleanupCallbackHolder.callback?.onLivesetsRemoving(livesetsToDelete)
             }
 
-        } catch (_: Throwable) {
+            db.withTransaction {
+                // Delete removed items (order matters for FKs: tracks -> livesets -> editions)
+                if (tracksToDelete.isNotEmpty()) {
+                    dao.deleteTracksByIds(tracksToDelete.toList())
+                }
+                if (livesetsToDelete.isNotEmpty()) {
+                    dao.deleteLivesetsByIds(livesetsToDelete.toList())
+                }
+                if (editionsToDelete.isNotEmpty()) {
+                    dao.deleteEditionsByIds(editionsToDelete.toList())
+                }
+
+                // Upsert new/updated items
+                if (newEditions.isNotEmpty()) dao.upsertEditions(newEditions)
+                if (newLivesets.isNotEmpty()) dao.upsertLivesets(newLivesets)
+                if (newTracks.isNotEmpty()) dao.upsertTracks(newTracks)
+            }
+
+        } catch (e: Throwable) {
+            Log.w("TfwDao", "Failed to refresh editions", e)
             // Intentionally swallow to keep UI working with stale data
         }
     }

@@ -43,6 +43,8 @@ dependencies {
     implementation(libs.media3.session)
     // UI is optional for service, but handy for future use
     implementation(libs.media3.ui)
+    // DataSource for downloads and caching
+    implementation(libs.media3.datasource)
 
     // Cast support (Media3 Cast extension and Google Cast framework)
     implementation(libs.androidx.media3.cast)

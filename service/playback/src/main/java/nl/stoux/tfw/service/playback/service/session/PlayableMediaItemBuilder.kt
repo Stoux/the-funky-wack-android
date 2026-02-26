@@ -19,21 +19,31 @@ object PlayableMediaItemBuilder {
      * Build a playable MediaItem for a liveset.
      * Returns null if no playable URL is available.
      * @param quality Preferred quality. Falls back to best available if requested quality is unavailable.
+     * @param downloadedUri Optional URI for a downloaded local file. If provided, this will be used instead of streaming URL.
      */
     fun build(
         lwd: LivesetWithDetails,
         showEditionInfo: Boolean = false,
         quality: AudioQuality? = null,
+        downloadedUri: Uri? = null,
     ): MediaItem? {
         val liveset = lwd.liveset
         val edition = lwd.edition
 
-        // Find the playable URL based on requested quality with fallbacks
-        val playableUrl = getUrlForQuality(liveset, quality)
-        if (playableUrl.isNullOrBlank()) return null
+        // Use downloaded URI if available, otherwise find the playable URL based on requested quality
+        val playableUri: Uri
+        val mimeType: String?
 
-        val playableUri = playableUrl.toUri()
-        val mimeType = detectMimeType(playableUrl)
+        if (downloadedUri != null) {
+            playableUri = downloadedUri
+            mimeType = detectMimeType(downloadedUri.toString())
+        } else {
+            val playableUrl = getUrlForQuality(liveset, quality)
+            if (playableUrl.isNullOrBlank()) return null
+            playableUri = playableUrl.toUri()
+            mimeType = detectMimeType(playableUrl)
+        }
+
         val mediaId = CustomMediaId.forEntity(liveset).original
         val artworkUri = edition.artworkUrl?.toUri()
 

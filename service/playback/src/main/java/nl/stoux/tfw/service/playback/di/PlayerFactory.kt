@@ -5,20 +5,24 @@ import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.cache.CacheDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.SeekParameters
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import dagger.hilt.android.qualifiers.ApplicationContext
+import nl.stoux.tfw.service.playback.download.CacheDataSourceFactory
 import nl.stoux.tfw.service.playback.settings.PlaybackSettingsRepository
 import javax.inject.Inject
 import javax.inject.Singleton
 
+@UnstableApi
 @Singleton
 class PlayerFactory @Inject constructor(
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    @CacheDataSourceFactory private val cacheDataSourceFactory: CacheDataSource.Factory,
 ) {
 
-    @UnstableApi
     fun create(bufferMinutes: Int = PlaybackSettingsRepository.DEFAULT_BUFFER_MINUTES): Player {
         // Correctly take audio priority over other apps when playing starts
         val audioAttributes = AudioAttributes.Builder()
@@ -38,8 +42,13 @@ class PlayerFactory @Inject constructor(
             .setPrioritizeTimeOverSizeThresholds(true)
             .build()
 
+        // Use cache-aware media source factory for seamless cached/streamed playback
+        val mediaSourceFactory = DefaultMediaSourceFactory(context)
+            .setDataSourceFactory(cacheDataSourceFactory)
+
         val player = ExoPlayer.Builder(context)
             .setLoadControl(loadControl)
+            .setMediaSourceFactory(mediaSourceFactory)
             .setSeekParameters(SeekParameters.CLOSEST_SYNC)
             .setWakeMode(C.WAKE_MODE_NETWORK)  /* Keep CPU + WiFi awake during streaming playback */
             .setHandleAudioBecomingNoisy(true)
@@ -50,7 +59,4 @@ class PlayerFactory @Inject constructor(
 
         return player
     }
-
-
-
 }

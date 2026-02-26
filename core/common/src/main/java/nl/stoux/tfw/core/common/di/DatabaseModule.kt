@@ -8,7 +8,9 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import nl.stoux.tfw.core.common.database.AppDatabase
+import nl.stoux.tfw.core.common.database.Migrations
 import nl.stoux.tfw.core.common.database.dao.EditionDao
+import nl.stoux.tfw.core.common.database.dao.LivesetDownloadDao
 import nl.stoux.tfw.core.common.database.dao.ManualQueueDao
 import javax.inject.Singleton
 
@@ -20,7 +22,8 @@ object DatabaseModule {
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): AppDatabase =
         Room.databaseBuilder(context, AppDatabase::class.java, "tfw.db")
-            .fallbackToDestructiveMigration() // MVP: safe while schema stabilizes // TODO: Remove this
+            .addMigrations(*Migrations.ALL_MIGRATIONS)
+            .fallbackToDestructiveMigrationOnDowngrade()
             .build()
 
     @Provides
@@ -28,4 +31,7 @@ object DatabaseModule {
 
     @Provides
     fun provideManualQueueDao(db: AppDatabase): ManualQueueDao = db.manualQueueDao()
+
+    @Provides
+    fun provideLivesetDownloadDao(db: AppDatabase): LivesetDownloadDao = db.livesetDownloadDao()
 }

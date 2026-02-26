@@ -23,6 +23,8 @@ class PlaybackSettingsRepository @Inject constructor(
         val bufferDurationMinutes = intPreferencesKey("playback::buffer_duration_minutes")
         val audioQuality = stringPreferencesKey("playback::audio_quality")
         val allowLossless = booleanPreferencesKey("playback::allow_lossless")
+        val offlineMode = booleanPreferencesKey("playback::offline_mode")
+        val preferDownloadedQuality = booleanPreferencesKey("playback::prefer_downloaded_quality")
     }
 
     companion object {
@@ -79,6 +81,36 @@ class PlaybackSettingsRepository @Inject constructor(
     suspend fun setAllowLossless(allow: Boolean) {
         dataStore.edit { prefs ->
             prefs[Keys.allowLossless] = allow
+        }
+    }
+
+    /**
+     * Whether to only show and play downloaded content.
+     * When enabled, livesets without downloads are hidden from the browse list,
+     * and playback will fail for non-downloaded content.
+     */
+    fun offlineMode(): Flow<Boolean> = dataStore.data.map { prefs ->
+        prefs[Keys.offlineMode] ?: false
+    }
+
+    suspend fun setOfflineMode(enabled: Boolean) {
+        dataStore.edit { prefs ->
+            prefs[Keys.offlineMode] = enabled
+        }
+    }
+
+    /**
+     * Whether to prefer the downloaded quality over streaming quality.
+     * When enabled, if a liveset is downloaded (even at lower quality),
+     * use the local file instead of streaming higher quality.
+     */
+    fun preferDownloadedQuality(): Flow<Boolean> = dataStore.data.map { prefs ->
+        prefs[Keys.preferDownloadedQuality] ?: true // Default to true - prefer local files
+    }
+
+    suspend fun setPreferDownloadedQuality(prefer: Boolean) {
+        dataStore.edit { prefs ->
+            prefs[Keys.preferDownloadedQuality] = prefer
         }
     }
 }

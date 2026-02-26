@@ -18,6 +18,7 @@ import kotlinx.coroutines.withContext
 import nl.stoux.tfw.core.common.database.dao.ManualQueueDao
 import nl.stoux.tfw.core.common.database.entity.ManualQueueItemEntity
 import nl.stoux.tfw.core.common.repository.EditionRepository
+import nl.stoux.tfw.service.playback.download.DownloadRepository
 import nl.stoux.tfw.service.playback.player.PlayerManager
 import nl.stoux.tfw.service.playback.service.session.CustomMediaId
 import nl.stoux.tfw.service.playback.service.session.PlayableMediaItemBuilder
@@ -36,6 +37,7 @@ class QueueManager @Inject constructor(
     private val playerManager: PlayerManager,
     private val editionRepository: EditionRepository,
     private val playbackSettings: PlaybackSettingsRepository,
+    private val downloadRepository: DownloadRepository,
 ) : Player.Listener {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
@@ -455,8 +457,20 @@ class QueueManager @Inject constructor(
         // Use the specified quality or fall back to current quality
         val effectiveQuality = quality ?: _currentQuality.value
 
+        // Check if we should use downloaded file
+        val preferDownloaded = playbackSettings.preferDownloadedQuality().first()
+        val downloadedUri = if (preferDownloaded) {
+            downloadRepository.getLocalUri(livesetId)
+        } else {
+            null
+        }
+
         // Use centralized builder for consistent MediaItem construction (incl. MIME type)
-        val baseMediaItem = PlayableMediaItemBuilder.build(lwd, quality = effectiveQuality) ?: return null
+        val baseMediaItem = PlayableMediaItemBuilder.build(
+            lwd = lwd,
+            quality = effectiveQuality,
+            downloadedUri = downloadedUri,
+        ) ?: return null
 
         val instanceId = java.util.UUID.randomUUID().toString()
         val withExtras = baseMediaItem.withQueueExtras(instanceId = instanceId, manualEntryId = manualEntryId)

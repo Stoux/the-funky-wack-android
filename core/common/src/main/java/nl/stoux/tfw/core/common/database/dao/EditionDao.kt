@@ -110,4 +110,27 @@ interface EditionDao {
         if (livesets.isNotEmpty()) upsertLivesets(livesets)
         if (tracks.isNotEmpty()) upsertTracks(tracks)
     }
+
+    // Queries for smart sync strategy
+    @Query("SELECT id FROM editions")
+    suspend fun getAllEditionIds(): List<Long>
+
+    @Query("SELECT id FROM livesets")
+    suspend fun getAllLivesetIds(): List<Long>
+
+    @Query("SELECT id FROM tracks")
+    suspend fun getAllTrackIds(): List<Long>
+
+    // Selective deletes for sync
+    @Query("DELETE FROM editions WHERE id IN (:ids)")
+    suspend fun deleteEditionsByIds(ids: List<Long>)
+
+    @Query("DELETE FROM livesets WHERE id IN (:ids)")
+    suspend fun deleteLivesetsByIds(ids: List<Long>)
+
+    @Query("DELETE FROM tracks WHERE id IN (:ids)")
+    suspend fun deleteTracksByIds(ids: List<Long>)
+
+    @Query("DELETE FROM tracks WHERE livesetId IN (:livesetIds)")
+    suspend fun deleteTracksByLivesetIds(livesetIds: List<Long>)
 }
