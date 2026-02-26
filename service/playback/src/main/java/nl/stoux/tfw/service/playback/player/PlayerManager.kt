@@ -12,11 +12,17 @@ import com.google.android.gms.cast.framework.CastContext
 import com.google.android.gms.cast.framework.CastSession
 import com.google.android.gms.cast.framework.SessionManagerListener
 import dagger.hilt.android.qualifiers.ApplicationContext
-import dagger.hilt.android.scopes.ServiceScoped
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.launch
 import nl.stoux.tfw.service.playback.di.PlayerFactory
+import nl.stoux.tfw.service.playback.settings.PlaybackSettingsRepository
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -30,7 +36,8 @@ private const val TAG = "PlayerManager"
 @OptIn(UnstableApi::class)
 class PlayerManager @Inject constructor(
     @ApplicationContext private val appContext: Context,
-    private val playerFactory: PlayerFactory
+    private val playerFactory: PlayerFactory,
+    private val playbackSettings: PlaybackSettingsRepository,
 ) {
 
     private val _activePlayer = MutableStateFlow<Player?>(null)
@@ -43,7 +50,29 @@ class PlayerManager @Inject constructor(
     private var castPlayer: CastPlayer? = null
     private var castContext: CastContext? = null
 
+    // Current buffer duration in minutes for player creation
+    private var currentBufferMinutes: Int = PlaybackSettingsRepository.DEFAULT_BUFFER_MINUTES
+
+    // Coroutine scope for settings observation
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+
     init {
+        // Observe buffer duration changes and recreate player when needed
+        scope.launch {
+            playbackSettings.bufferDurationMinutes()
+                .distinctUntilChanged()
+                .collect { newMinutes ->
+                    val oldMinutes = currentBufferMinutes
+                    currentBufferMinutes = newMinutes
+
+                    // Only recreate if we have an active local player and duration changed
+                    val currentPlayer = _activePlayer.value
+                    if (currentPlayer is ExoPlayer && oldMinutes != newMinutes) {
+                        Log.d(TAG, "Buffer duration changed from ${oldMinutes}m to ${newMinutes}m, recreating player")
+                        recreateLocalPlayer()
+                    }
+                }
+        }
         // Initialize Cast context if available and listen for session changes.
         runCatching {
             castContext = CastContext.getSharedInstance(appContext)
@@ -78,15 +107,31 @@ class PlayerManager @Inject constructor(
         val player = _activePlayer.value
         if (player != null) return player
 
-        val newPlayer = playerFactory.create()
+        val newPlayer = playerFactory.create(currentBufferMinutes)
         _activePlayer.value = newPlayer
         return newPlayer
+    }
+
+    /**
+     * Recreates the local ExoPlayer with current settings, preserving playback state.
+     */
+    @OptIn(UnstableApi::class)
+    @Synchronized
+    private fun recreateLocalPlayer() {
+        val oldPlayer = _activePlayer.value as? ExoPlayer ?: return
+        val newPlayer = playerFactory.create(currentBufferMinutes)
+        transferPlaybackState(oldPlayer, newPlayer)
+        _activePlayer.value = newPlayer
+        runCatching { oldPlayer.release() }.onFailure {
+            Log.w(TAG, "Failed to release old player during recreation", it)
+        }
+        Log.d(TAG, "Player recreated with ${currentBufferMinutes}m buffer")
     }
 
     @OptIn(UnstableApi::class)
     private fun switchToCast(session: CastSession) {
         Log.d(TAG, "Switching to Cast player...")
-        val old = _activePlayer.value ?: playerFactory.create().also { _activePlayer.value = it }
+        val old = _activePlayer.value ?: playerFactory.create(currentBufferMinutes).also { _activePlayer.value = it }
         val ctx = castContext ?: run {
             Log.e(TAG, "switchToCast: CastContext is null, cannot switch")
             return
@@ -109,7 +154,7 @@ class PlayerManager @Inject constructor(
         val oldCast = castPlayer
         val local = when (val p = _activePlayer.value) {
             is ExoPlayer -> p
-            else -> playerFactory.create().also { _activePlayer.value = it }
+            else -> playerFactory.create(currentBufferMinutes).also { _activePlayer.value = it }
         }
         if (oldCast != null) {
             transferPlaybackState(oldCast, local)

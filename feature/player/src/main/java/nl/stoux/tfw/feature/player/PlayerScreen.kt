@@ -271,6 +271,7 @@ fun PlayerControls(
     val canSkipPrevTrack by viewModel.canSkipPrevTrack.collectAsState()
     val canSkipNextTrack by viewModel.canSkipNextTrack.collectAsState()
     val isBuffering by viewModel.isBuffering.collectAsState()
+    val bufferedProgress by viewModel.bufferedProgress.collectAsState()
 
 
     Column(
@@ -356,7 +357,8 @@ fun PlayerControls(
                         progress = (progress ?: 0f).coerceIn(0f, 1f),
                         onProgressChange = { p -> viewModel.seekToPercent(p) },
                         modifier = Modifier.matchParentSize(),
-                        durationMs = durationMs
+                        durationMs = durationMs,
+                        bufferedProgress = bufferedProgress
                     )
                 }
                 peaks != null && peaks.isEmpty() -> {

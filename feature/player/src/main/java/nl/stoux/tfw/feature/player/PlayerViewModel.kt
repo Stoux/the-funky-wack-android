@@ -61,6 +61,9 @@ class PlayerViewModel @Inject constructor(
     private val _progress = MutableStateFlow<Float?>(null)
     val progress: StateFlow<Float?> = _progress
 
+    private val _bufferedProgress = MutableStateFlow<Float?>(null)
+    val bufferedProgress: StateFlow<Float?> = _bufferedProgress
+
     private val _isBuffering = MutableStateFlow(false)
     val isBuffering: StateFlow<Boolean> = _isBuffering
 
@@ -153,6 +156,7 @@ class PlayerViewModel @Inject constructor(
                         val dur = c.duration.takeIf { it > 0 } ?: _durationMs.value
                         _durationMs.value = dur
                         _progress.value = if (dur > 0) (c.currentPosition.toFloat() / dur.toFloat()).coerceIn(0f, 1f) else null
+                        _bufferedProgress.value = if (dur > 0) (c.bufferedPosition.toFloat() / dur.toFloat()).coerceIn(0f, 1f) else null
                     }
                     delay(500)
                 }
@@ -170,6 +174,7 @@ class PlayerViewModel @Inject constructor(
             if (dur > 0) _durationMs.value = dur
             _positionMs.value = c.currentPosition
             _progress.value = if (_durationMs.value > 0) (_positionMs.value.toFloat() / _durationMs.value.toFloat()).coerceIn(0f, 1f) else null
+            _bufferedProgress.value = if (_durationMs.value > 0) (c.bufferedPosition.toFloat() / _durationMs.value.toFloat()).coerceIn(0f, 1f) else null
         }
     }
 

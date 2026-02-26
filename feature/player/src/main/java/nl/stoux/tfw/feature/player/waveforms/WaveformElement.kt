@@ -55,6 +55,7 @@ fun ZoomableWaveform(
     progressBrush: Brush = Brush.verticalGradient(listOf(Color.White, Color.LightGray)),
     heightMultiplier: Float = 1f,
     maxZoom: Float = DEFAULT_MAXIMUM_ZOOM,
+    bufferedProgress: Float? = null,
 ) {
     var zoom by remember { mutableFloatStateOf(MINIMUM_ZOOM) }
     var pan by remember { mutableFloatStateOf(0f) } // pan in indices
@@ -103,7 +104,8 @@ fun ZoomableWaveform(
             waveformBrush = waveformBrush,
             progressBrush = progressBrush,
             modifier = Modifier.matchParentSize(),
-            heightMultiplier = heightMultiplier
+            heightMultiplier = heightMultiplier,
+            bufferedProgress = bufferedProgress
         )
     }
 }
@@ -119,6 +121,7 @@ fun AnimatedZoomableWaveform(
     progressBrush: Brush = Brush.verticalGradient(listOf(Color.White, Color.LightGray)),
     durationMs: Long? = null,
     maxZoomOverride: Float? = null,
+    bufferedProgress: Float? = null,
 ) {
     val height = remember { Animatable(1f) }
 
@@ -151,7 +154,8 @@ fun AnimatedZoomableWaveform(
         waveformBrush = waveformBrush,
         progressBrush = progressBrush,
         heightMultiplier = height.value,
-        maxZoom = computedMaxZoom
+        maxZoom = computedMaxZoom,
+        bufferedProgress = bufferedProgress
     )
 }
 
@@ -174,6 +178,7 @@ private fun Waveform(
     waveformBrush: Brush = Brush.verticalGradient(listOf(Color(0xFF444444), Color(0xFF666666))),
     progressBrush: Brush = Brush.verticalGradient(listOf(Color.White, Color.LightGray)),
     heightMultiplier: Float = 1f,
+    bufferedProgress: Float? = null,
 ) {
 
     // Target a SoundCloud-like thin bar look
@@ -405,6 +410,18 @@ private fun Waveform(
                 topLeft = Offset(x, yAvg),
                 size = Size(spikeWidth, hAvg),
                 cornerRadius = CornerRadius(2.dp.toPx())
+            )
+        }
+
+        // Draw buffered progress line at the bottom
+        if (bufferedProgress != null && bufferedProgress > 0f) {
+            val bufferLineHeight = 2.dp.toPx()
+            val bufferLineY = size.height - bufferLineHeight
+            val bufferLineWidth = size.width * bufferedProgress.coerceIn(0f, 1f)
+            drawRect(
+                color = Color.White.copy(alpha = 0.3f),
+                topLeft = Offset(0f, bufferLineY),
+                size = Size(bufferLineWidth, bufferLineHeight)
             )
         }
 
