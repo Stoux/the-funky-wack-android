@@ -30,9 +30,11 @@ import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import kotlin.math.ceil
+import kotlin.math.cos
 import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.sin
 
 private const val SEEK_DELTA = 0.01f // 1% per D-pad press
 
@@ -43,6 +45,7 @@ fun TvWaveformDisplay(
     progress: Float,
     isPlaying: Boolean,
     seekTargetProgress: Float?,
+    hueShift: Float = 0f,
     onSeekStart: () -> Unit,
     onSeekAdjust: (Float) -> Unit,
     onSeekConfirm: () -> Unit,
@@ -132,6 +135,7 @@ fun TvWaveformDisplay(
                     progress = progress,
                     isPlaying = isPlaying,
                     seekTargetProgress = seekTargetProgress,
+                    hueShift = hueShift,
                     modifier = Modifier.fillMaxSize()
                 )
             }
@@ -145,6 +149,7 @@ private fun WaveformCanvas(
     progress: Float,
     isPlaying: Boolean,
     seekTargetProgress: Float?,
+    hueShift: Float = 0f,
     modifier: Modifier = Modifier,
 ) {
     val displayProgress = seekTargetProgress ?: progress
@@ -175,33 +180,68 @@ private fun WaveformCanvas(
         val stepX = size.width / bars.size
         val maxBarHeight = size.height
 
-        // Colors - grayer when paused
+        // Colors - grayer when paused, with optional hue shift
         val pausedAlphaMultiplier = if (isPlaying) 1f else 0.5f
+
+        // Helper function to shift hue of a color
+        fun Color.shiftHue(degrees: Float): Color {
+            if (degrees == 0f) return this
+            val radians = degrees * (Math.PI / 180f).toFloat()
+            val cosA = cos(radians)
+            val sinA = sin(radians)
+
+            // Apply hue rotation matrix
+            val r = this.red
+            val g = this.green
+            val b = this.blue
+
+            val newR = (0.213f + cosA * 0.787f - sinA * 0.213f) * r +
+                    (0.715f - cosA * 0.715f - sinA * 0.715f) * g +
+                    (0.072f - cosA * 0.072f + sinA * 0.928f) * b
+            val newG = (0.213f - cosA * 0.213f + sinA * 0.143f) * r +
+                    (0.715f + cosA * 0.285f + sinA * 0.140f) * g +
+                    (0.072f - cosA * 0.072f - sinA * 0.283f) * b
+            val newB = (0.213f - cosA * 0.213f - sinA * 0.787f) * r +
+                    (0.715f - cosA * 0.715f + sinA * 0.715f) * g +
+                    (0.072f + cosA * 0.928f + sinA * 0.072f) * b
+
+            return Color(
+                red = newR.coerceIn(0f, 1f),
+                green = newG.coerceIn(0f, 1f),
+                blue = newB.coerceIn(0f, 1f),
+                alpha = this.alpha
+            )
+        }
+
+        val basePlayedColor = Color.White.shiftHue(hueShift)
+        val baseUnplayedColor1 = Color(0xFFB0BEC5).shiftHue(hueShift)
+        val baseUnplayedColor2 = Color(0xFF90A4AE).shiftHue(hueShift)
+
         val playedOuter = Brush.verticalGradient(
             listOf(
-                Color.White.copy(alpha = 0.3f * pausedAlphaMultiplier),
-                Color.White.copy(alpha = 0.3f * pausedAlphaMultiplier)
+                basePlayedColor.copy(alpha = 0.3f * pausedAlphaMultiplier),
+                basePlayedColor.copy(alpha = 0.3f * pausedAlphaMultiplier)
             )
         )
         val playedInner = Brush.verticalGradient(
             listOf(
-                Color.White.copy(alpha = 0.95f * pausedAlphaMultiplier),
-                Color(0xFFF5F5F5).copy(alpha = 0.95f * pausedAlphaMultiplier)
+                basePlayedColor.copy(alpha = 0.95f * pausedAlphaMultiplier),
+                basePlayedColor.copy(alpha = 0.95f * pausedAlphaMultiplier)
             )
         )
         val unplayedOuter = Brush.verticalGradient(
             listOf(
-                Color(0xFFB0BEC5).copy(alpha = 0.2f * pausedAlphaMultiplier),
-                Color(0xFF90A4AE).copy(alpha = 0.2f * pausedAlphaMultiplier)
+                baseUnplayedColor1.copy(alpha = 0.2f * pausedAlphaMultiplier),
+                baseUnplayedColor2.copy(alpha = 0.2f * pausedAlphaMultiplier)
             )
         )
         val unplayedInner = Brush.verticalGradient(
             listOf(
-                Color(0xFFB0BEC5).copy(alpha = 0.6f * pausedAlphaMultiplier),
-                Color(0xFF90A4AE).copy(alpha = 0.6f * pausedAlphaMultiplier)
+                baseUnplayedColor1.copy(alpha = 0.6f * pausedAlphaMultiplier),
+                baseUnplayedColor2.copy(alpha = 0.6f * pausedAlphaMultiplier)
             )
         )
-        val seekIndicatorColor = Color(0xFF4CAF50) // Green for seek indicator
+        val seekIndicatorColor = Color(0xFF4CAF50).shiftHue(hueShift) // Green for seek indicator
 
         bars.forEachIndexed { index, (avg, peak) ->
             val hPeak = (peak * maxBarHeight).coerceAtLeast(minBarHeight)

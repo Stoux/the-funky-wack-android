@@ -11,4 +11,7 @@ sealed interface TvDestination {
 
     @Serializable
     data object NowPlaying : TvDestination
+
+    @Serializable
+    data object Settings : TvDestination
 }

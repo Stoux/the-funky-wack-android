@@ -83,6 +83,9 @@ dependencies {
     // Serialization (for navigation)
     implementation(libs.serialization.json)
 
+    // DataStore
+    implementation(libs.androidx.datastore.preferences)
+
     // Image loading
     implementation(libs.coil.compose)
 

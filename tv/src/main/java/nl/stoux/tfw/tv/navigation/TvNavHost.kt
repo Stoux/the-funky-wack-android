@@ -8,6 +8,7 @@ import androidx.navigation.toRoute
 import nl.stoux.tfw.tv.ui.browse.TvBrowseScreen
 import nl.stoux.tfw.tv.ui.browse.TvEditionDetailScreen
 import nl.stoux.tfw.tv.ui.player.TvNowPlayingScreen
+import nl.stoux.tfw.tv.ui.settings.TvSettingsScreen
 
 @Composable
 fun TvNavHost() {
@@ -27,6 +28,9 @@ fun TvNavHost() {
                 },
                 onNowPlayingClick = {
                     navController.navigate(TvDestination.NowPlaying)
+                },
+                onSettingsClick = {
+                    navController.navigate(TvDestination.Settings)
                 }
             )
         }
@@ -46,6 +50,14 @@ fun TvNavHost() {
 
         composable<TvDestination.NowPlaying> {
             TvNowPlayingScreen(
+                onBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        composable<TvDestination.Settings> {
+            TvSettingsScreen(
                 onBack = {
                     navController.popBackStack()
                 }

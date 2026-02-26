@@ -28,6 +28,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Surface
@@ -103,6 +104,7 @@ class MainActivity : FragmentActivity() {
                 val scaffoldState = rememberBottomSheetScaffoldState()
                 val playerIsOpen = scaffoldState.bottomSheetState.currentValue == SheetValue.Expanded || scaffoldState.bottomSheetState.targetValue == SheetValue.Expanded
                 var playerIsFullScreen by remember { mutableStateOf(false) }
+                var showSettings by remember { mutableStateOf(false) }
                 val scope = rememberCoroutineScope()
 
                 // React to external request to open player (e.g., notification tap)
@@ -144,6 +146,14 @@ class MainActivity : FragmentActivity() {
                                         text = "Wacky beats, the recordings.",
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            },
+                            actions = {
+                                IconButton(onClick = { showSettings = true }) {
+                                    Icon(
+                                        imageVector = Icons.Default.Settings,
+                                        contentDescription = "Settings"
                                     )
                                 }
                             }
@@ -191,9 +201,12 @@ class MainActivity : FragmentActivity() {
                         }
                         // Back should close the player first; only close queue if player isn't open
                         BackHandler(enabled = showQueue && !playerIsOpen) { playerViewModel.closeQueue() }
+                        BackHandler(enabled = showSettings) { showSettings = false }
 
                         androidx.compose.foundation.layout.Box(modifier = Modifier.weight(1f)) {
-                            if (showQueue) {
+                            if (showSettings) {
+                                SettingsScreen(onBack = { showSettings = false })
+                            } else if (showQueue) {
                                 nl.stoux.tfw.feature.player.QueueScreen(
                                     queueManager = queueManager,
                                     editionRepository = editionRepository,

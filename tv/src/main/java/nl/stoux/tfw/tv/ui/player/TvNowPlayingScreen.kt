@@ -23,15 +23,20 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.MaterialTheme
@@ -57,6 +62,14 @@ fun TvNowPlayingScreen(
     val canSkipNextTrack by viewModel.canSkipNextTrack.collectAsState()
     val seekTargetProgress by viewModel.seekTargetProgress.collectAsState()
 
+    // OLED mode state
+    val isOledModeActive by viewModel.isOledModeActive.collectAsState()
+    val oledSettings by viewModel.oledSettings.collectAsState()
+    val audioQuality by viewModel.audioQuality.collectAsState()
+
+    // OLED mode controller
+    val oledController = rememberOledModeController()
+
     var showTracklistDialog by remember { mutableStateOf(false) }
     var isWaveformFocused by remember { mutableStateOf(false) }
     val playPauseFocusRequester = remember { FocusRequester() }
@@ -66,6 +79,32 @@ fun TvNowPlayingScreen(
     val artistName = liveset?.artistName ?: ""
     val artworkUrl = currentLiveset?.edition?.artworkUrl
 
+    // Handle OLED mode transitions
+    LaunchedEffect(isOledModeActive) {
+        if (isOledModeActive) {
+            oledController.enterOledMode(oledSettings)
+        } else {
+            oledController.exitOledMode()
+        }
+    }
+
+    // Handle drift animation
+    LaunchedEffect(isOledModeActive, oledSettings.driftEnabled) {
+        if (isOledModeActive && oledSettings.driftEnabled) {
+            oledController.animateDrift(
+                maxOffsetX = OledModeController.MAX_DRIFT_X_DP,
+                maxOffsetY = OledModeController.MAX_DRIFT_Y_DP
+            )
+        }
+    }
+
+    // Handle color cycling
+    LaunchedEffect(isOledModeActive, oledSettings.colorShiftEnabled) {
+        if (isOledModeActive && oledSettings.colorShiftEnabled) {
+            oledController.animateColorCycle()
+        }
+    }
+
     // Request focus on play/pause button when liveset loads
     LaunchedEffect(liveset) {
         if (liveset != null) {
@@ -73,10 +112,27 @@ fun TvNowPlayingScreen(
         }
     }
 
+    // Handle key events for OLED mode - exit on any input
+    fun handleInteraction() {
+        viewModel.onUserInteraction()
+        if (isOledModeActive) {
+            viewModel.exitOledMode()
+        }
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
+            .onKeyEvent { event ->
+                if (event.type == KeyEventType.KeyDown) {
+                    handleInteraction()
+                }
+                false // Don't consume the event, let it propagate
+            }
+            .graphicsLayer {
+                alpha = oledController.dimAlpha.value
+            }
     ) {
         if (liveset == null) {
             // No playback state
@@ -111,11 +167,11 @@ fun TvNowPlayingScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         if (artworkUrl != null) {
-                            AsyncImage(
-                                model = artworkUrl,
+                            DriftingArtwork(
+                                imageUrl = artworkUrl,
                                 contentDescription = liveset.title,
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Fit
+                                isDrifting = isOledModeActive && oledSettings.driftEnabled,
+                                modifier = Modifier.fillMaxSize()
                             )
                         } else {
                             Box(
@@ -140,7 +196,7 @@ fun TvNowPlayingScreen(
                             .fillMaxHeight(),
                         verticalArrangement = Arrangement.Top
                     ) {
-                        // Top: Title + Artist + Edition
+                        // Top: Title + Artist (always visible, just dimmed)
                         Box(
                             contentAlignment = Alignment.CenterStart
                         ) {
@@ -168,17 +224,18 @@ fun TvNowPlayingScreen(
                                     )
                                 }
 
-                                // Edition + tagline
+                                // Edition + tagline (fades out)
                                 currentLiveset?.edition?.let { edition ->
                                     Text(
                                         text = buildString {
                                             append("TFW #${edition.number}")
-                                            edition.tagLine?.let { append(" • $it") }
+                                            edition.tagLine?.let { append(" - $it") }
                                         },
                                         style = MaterialTheme.typography.bodyMedium,
                                         color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f),
                                         maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.alpha(oledController.uiVisibility.value)
                                     )
                                 }
                             }
@@ -186,28 +243,45 @@ fun TvNowPlayingScreen(
 
                         Spacer(modifier = Modifier.height(24.dp))
 
-                        // Middle: Playback controls
+                        // Middle: Playback controls (fades out in OLED mode)
                         Box(
-                            contentAlignment = Alignment.Center
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier.alpha(oledController.uiVisibility.value)
                         ) {
                             TvPlaybackControls(
                                 isPlaying = isPlaying,
                                 canSkipPrevTrack = canSkipPrevTrack,
                                 canSkipNextTrack = canSkipNextTrack,
+                                isOledModeActive = isOledModeActive,
+                                audioQuality = audioQuality,
                                 onPlayPause = { viewModel.playPause() },
                                 onPreviousLiveset = { viewModel.previousLiveset() },
                                 onNextLiveset = { viewModel.nextLiveset() },
                                 onPreviousTrack = { viewModel.skipTrackBackward() },
                                 onNextTrack = { viewModel.skipTrackForward() },
+                                onToggleOledMode = { viewModel.toggleOledMode() },
+                                onAudioQualityChange = { viewModel.setAudioQuality(it) },
                                 playPauseFocusRequester = playPauseFocusRequester,
                             )
                         }
 
                         Spacer(modifier = Modifier.weight(1f))
 
-                        // Bottom: Compact track indicator
+                        // Current track indicator (always visible, dimmed)
+                        currentTrack?.let { track ->
+                            Text(
+                                text = "Now: ${track.title}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+
+                        // Full track controls (fades out in OLED mode)
                         Box(
-                            contentAlignment = Alignment.TopStart
+                            contentAlignment = Alignment.TopStart,
+                            modifier = Modifier.alpha(oledController.uiVisibility.value)
                         ) {
                             if (tracks.isNotEmpty()) {
                                 CompactTrackIndicator(
@@ -231,6 +305,7 @@ fun TvNowPlayingScreen(
                         progress = progress,
                         isPlaying = isPlaying,
                         seekTargetProgress = seekTargetProgress,
+                        hueShift = if (isOledModeActive && oledSettings.colorShiftEnabled) oledController.waveformHue.value else 0f,
                         onSeekStart = { viewModel.startSeek() },
                         onSeekAdjust = { delta -> viewModel.adjustSeek(delta) },
                         onSeekConfirm = { viewModel.confirmSeek() },
@@ -243,7 +318,7 @@ fun TvNowPlayingScreen(
 
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    // Time display
+                    // Time display (always visible, dimmed via parent)
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
@@ -253,30 +328,32 @@ fun TvNowPlayingScreen(
                             style = MaterialTheme.typography.bodyLarge,
                             color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
                         )
-                        // Center: seek target, focus hint, or buffering indicator
-                        val currentSeekTarget = seekTargetProgress
-                        when {
-                            currentSeekTarget != null -> {
-                                val seekTargetMs = (currentSeekTarget * durationMs).toLong()
-                                Text(
-                                    text = "Seek to ${formatTime(seekTargetMs)}",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = Color(0xFF4CAF50) // Green to match waveform indicator
-                                )
-                            }
-                            isWaveformFocused -> {
-                                Text(
-                                    text = "◀  ▶  to seek",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
-                                )
-                            }
-                            isBuffering -> {
-                                Text(
-                                    text = "Buffering...",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
-                                )
+                        // Center: seek target, focus hint, or buffering indicator (fades in OLED mode)
+                        Box(modifier = Modifier.alpha(oledController.uiVisibility.value)) {
+                            val currentSeekTarget = seekTargetProgress
+                            when {
+                                currentSeekTarget != null -> {
+                                    val seekTargetMs = (currentSeekTarget * durationMs).toLong()
+                                    Text(
+                                        text = "Seek to ${formatTime(seekTargetMs)}",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = Color(0xFF4CAF50) // Green to match waveform indicator
+                                    )
+                                }
+                                isWaveformFocused -> {
+                                    Text(
+                                        text = "<<  >> to seek",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
+                                    )
+                                }
+                                isBuffering -> {
+                                    Text(
+                                        text = "Buffering...",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
+                                    )
+                                }
                             }
                         }
                         Text(

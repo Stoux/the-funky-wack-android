@@ -14,8 +14,10 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import nl.stoux.tfw.core.common.database.dao.LivesetWithDetails
 import nl.stoux.tfw.core.common.database.entity.TrackEntity
@@ -25,6 +27,10 @@ import nl.stoux.tfw.service.playback.service.manager.LivesetTrackListener
 import nl.stoux.tfw.service.playback.service.manager.LivesetTrackManager
 import nl.stoux.tfw.service.playback.service.manager.UnbindCallback
 import nl.stoux.tfw.service.playback.service.queue.QueueManager
+import nl.stoux.tfw.service.playback.settings.PlaybackSettingsRepository
+import nl.stoux.tfw.service.playback.settings.PlaybackSettingsRepository.AudioQuality
+import nl.stoux.tfw.tv.data.TvSettingsRepository
+import nl.stoux.tfw.tv.data.TvSettingsRepository.OledSettings
 import javax.inject.Inject
 
 @HiltViewModel
@@ -33,6 +39,8 @@ class TvNowPlayingViewModel @Inject constructor(
     private val livesetTrackManager: LivesetTrackManager,
     private val queueManager: QueueManager,
     private val waveformDownloader: WaveformDownloader,
+    private val tvSettingsRepository: TvSettingsRepository,
+    private val playbackSettings: PlaybackSettingsRepository,
 ) : ViewModel() {
 
     private var controller: MediaController? = null
@@ -76,7 +84,29 @@ class TvNowPlayingViewModel @Inject constructor(
     private val _seekTargetProgress = MutableStateFlow<Float?>(null)
     val seekTargetProgress: StateFlow<Float?> = _seekTargetProgress.asStateFlow()
 
+    // OLED mode state
+    private val _isOledModeActive = MutableStateFlow(false)
+    val isOledModeActive: StateFlow<Boolean> = _isOledModeActive.asStateFlow()
+
+    private val _lastInteractionTime = MutableStateFlow(System.currentTimeMillis())
+    val lastInteractionTime: StateFlow<Long> = _lastInteractionTime.asStateFlow()
+
+    val oledSettings: StateFlow<OledSettings> = tvSettingsRepository.oledSettings()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = OledSettings()
+        )
+
+    val audioQuality: StateFlow<AudioQuality> = playbackSettings.audioQuality()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = AudioQuality.DEFAULT
+        )
+
     private var progressJob: Job? = null
+    private var inactivityJob: Job? = null
 
     init {
         trackManagerUnbindCallback = livesetTrackManager.bind(TrackListener())
@@ -108,6 +138,27 @@ class TvNowPlayingViewModel @Inject constructor(
                 updateDurations()
                 startOrStopProgressLoop(_isPlaying.value)
             }, { runnable -> runnable.run() })
+        }
+
+        // Start inactivity monitoring
+        startInactivityMonitoring()
+    }
+
+    private fun startInactivityMonitoring() {
+        inactivityJob?.cancel()
+        inactivityJob = viewModelScope.launch {
+            tvSettingsRepository.oledSettings().collect { settings ->
+                if (settings.autoEnable && !_isOledModeActive.value) {
+                    val timeoutMs = settings.timeoutMinutes * 60 * 1000L
+                    while (true) {
+                        delay(1000) // Check every second
+                        val elapsed = System.currentTimeMillis() - _lastInteractionTime.value
+                        if (elapsed >= timeoutMs && !_isOledModeActive.value) {
+                            _isOledModeActive.value = true
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -203,6 +254,30 @@ class TvNowPlayingViewModel @Inject constructor(
         _seekTargetProgress.value = null
     }
 
+    // OLED mode controls
+    fun onUserInteraction() {
+        _lastInteractionTime.value = System.currentTimeMillis()
+    }
+
+    fun toggleOledMode() {
+        _isOledModeActive.value = !_isOledModeActive.value
+        if (!_isOledModeActive.value) {
+            // Reset interaction time when exiting OLED mode
+            _lastInteractionTime.value = System.currentTimeMillis()
+        }
+    }
+
+    fun exitOledMode() {
+        _isOledModeActive.value = false
+        _lastInteractionTime.value = System.currentTimeMillis()
+    }
+
+    fun setAudioQuality(quality: AudioQuality) {
+        viewModelScope.launch {
+            playbackSettings.setAudioQuality(quality)
+        }
+    }
+
     fun seekToTrack(track: TrackEntity) {
         val timestampSec = track.timestampSec
         if (timestampSec != null) {
@@ -213,6 +288,8 @@ class TvNowPlayingViewModel @Inject constructor(
     override fun onCleared() {
         progressJob?.cancel()
         progressJob = null
+        inactivityJob?.cancel()
+        inactivityJob = null
         controller?.release()
         controller = null
         trackManagerUnbindCallback?.invoke()
