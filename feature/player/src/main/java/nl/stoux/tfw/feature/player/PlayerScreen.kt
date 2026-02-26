@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Divider
@@ -38,7 +39,9 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconToggleButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -76,6 +79,9 @@ import nl.stoux.tfw.feature.player.util.formatTime
 import nl.stoux.tfw.feature.player.util.shareLiveset
 import nl.stoux.tfw.feature.player.waveforms.ZoomableWaveform
 import nl.stoux.tfw.feature.player.waveforms.AnimatedZoomableWaveform
+import nl.stoux.tfw.service.playback.settings.PlaybackSettingsRepository.AudioQuality
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 
 @Composable
 fun PlayerScreen(
@@ -272,6 +278,10 @@ fun PlayerControls(
     val canSkipNextTrack by viewModel.canSkipNextTrack.collectAsState()
     val isBuffering by viewModel.isBuffering.collectAsState()
     val bufferedProgress by viewModel.bufferedProgress.collectAsState()
+    val audioQuality by viewModel.audioQuality.collectAsState()
+    val actualQuality by viewModel.actualQuality.collectAsState()
+    val availableQualities by viewModel.availableQualities.collectAsState()
+    var showQualityDialog by remember { mutableStateOf(false) }
 
 
     Column(
@@ -508,6 +518,28 @@ fun PlayerControls(
                         CastAction()
                         Spacer(modifier = Modifier.size(4.dp))
                     }
+
+                    // Audio quality button - shows actual quality being played
+                    val displayQuality = actualQuality ?: audioQuality
+                    val qualityLabel = when (displayQuality) {
+                        AudioQuality.LOW -> "LQ"
+                        AudioQuality.HIGH -> "HQ"
+                        AudioQuality.LOSSLESS -> "WAV"
+                        null -> "HQ"
+                    }
+                    Surface(
+                        onClick = { showQualityDialog = true },
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        shape = RoundedCornerShape(6.dp),
+                        modifier = Modifier.padding(end = 4.dp)
+                    ) {
+                        Text(
+                            text = qualityLabel,
+                            style = MaterialTheme.typography.labelMedium,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)
+                        )
+                    }
+
                     IconButton(onClick = { viewModel.openQueue() }) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.QueueMusic,
@@ -557,6 +589,56 @@ fun PlayerControls(
 
             Spacer(Modifier.height(8.dp))
         }
+    }
+
+    // Audio quality selection dialog
+    if (showQualityDialog) {
+        AlertDialog(
+            onDismissRequest = { showQualityDialog = false },
+            title = { Text("Audio Quality") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    AudioQuality.entries.forEach { quality ->
+                        val isSelected = quality == (actualQuality ?: audioQuality)
+                        val isAvailable = quality in availableQualities
+                        Surface(
+                            onClick = {
+                                if (isAvailable) {
+                                    viewModel.setAudioQuality(quality)
+                                    showQualityDialog = false
+                                }
+                            },
+                            color = when {
+                                isSelected -> MaterialTheme.colorScheme.primary
+                                isAvailable -> MaterialTheme.colorScheme.surfaceVariant
+                                else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                            },
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = when (quality) {
+                                    AudioQuality.LOW -> "Low Quality (LQ)"
+                                    AudioQuality.HIGH -> "High Quality (HQ)"
+                                    AudioQuality.LOSSLESS -> "Lossless (WAV)"
+                                },
+                                modifier = Modifier.padding(16.dp),
+                                color = when {
+                                    !isAvailable -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+                                    isSelected -> MaterialTheme.colorScheme.onPrimary
+                                    else -> MaterialTheme.colorScheme.onSurface
+                                }
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showQualityDialog = false }) {
+                    Text("Close")
+                }
+            }
+        )
     }
 }
 

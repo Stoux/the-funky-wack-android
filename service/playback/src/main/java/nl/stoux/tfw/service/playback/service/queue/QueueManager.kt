@@ -21,6 +21,8 @@ import nl.stoux.tfw.core.common.repository.EditionRepository
 import nl.stoux.tfw.service.playback.player.PlayerManager
 import nl.stoux.tfw.service.playback.service.session.CustomMediaId
 import nl.stoux.tfw.service.playback.service.session.PlayableMediaItemBuilder
+import nl.stoux.tfw.service.playback.settings.PlaybackSettingsRepository
+import nl.stoux.tfw.service.playback.settings.PlaybackSettingsRepository.AudioQuality
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -33,6 +35,7 @@ class QueueManager @Inject constructor(
     private val manualQueueDao: ManualQueueDao,
     private val playerManager: PlayerManager,
     private val editionRepository: EditionRepository,
+    private val playbackSettings: PlaybackSettingsRepository,
 ) : Player.Listener {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
@@ -41,6 +44,14 @@ class QueueManager @Inject constructor(
 
     private val _state = MutableStateFlow(QueueState())
     val state: StateFlow<QueueState> = _state
+
+    // Current playback quality (per-session, not persisted)
+    private val _currentQuality = MutableStateFlow<AudioQuality?>(null)
+    val currentQuality: StateFlow<AudioQuality?> = _currentQuality
+
+    // Actual quality being used (may differ from requested if requested isn't available)
+    private val _actualQuality = MutableStateFlow<AudioQuality?>(null)
+    val actualQuality: StateFlow<AudioQuality?> = _actualQuality
 
     // Flag to track if a user-initiated action has set the queue (prevents restore from overwriting)
     @Volatile
@@ -54,6 +65,12 @@ class QueueManager @Inject constructor(
     private var boundPlayer: Player? = null
 
     init {
+        // Load default quality from settings
+        scope.launch {
+            val defaultQuality = playbackSettings.audioQuality().first()
+            _currentQuality.value = defaultQuality
+        }
+
         // Load manual queue from DB
         ioScope.launch {
             val items = manualQueueDao.loadAll()
@@ -255,6 +272,9 @@ class QueueManager @Inject constructor(
             userInitiatedPlayback = true
         }
         scope.launch {
+            // Reset to default quality from settings when starting new playback
+            val defaultQuality = playbackSettings.audioQuality().first()
+            _currentQuality.value = defaultQuality
             // Resolve the list of context liveset IDs
             val contextLivesetIds: List<Long> = try {
                 val lwd = withContext(Dispatchers.IO) { editionRepository.findLiveset(livesetId).first() }
@@ -311,6 +331,79 @@ class QueueManager @Inject constructor(
     }
 
     /**
+     * Change the audio quality for the current playback session.
+     * This does NOT change the default quality setting, only the current playback.
+     * The current item will be replaced with the new quality while preserving position.
+     */
+    fun setQuality(quality: AudioQuality) {
+        scope.launch {
+            val currentLivesetId = _state.value.currentLivesetId ?: return@launch
+            val player = playerManager.currentPlayer()
+            val currentPosition = player.currentPosition
+            val wasPlaying = player.isPlaying
+
+            _currentQuality.value = quality
+
+            // Resolve the current liveset with the new quality
+            val lwd = withContext(Dispatchers.IO) { editionRepository.findLiveset(currentLivesetId).first() }
+                ?: return@launch
+
+            // Update actual quality based on what's available
+            val actualQuality = PlayableMediaItemBuilder.getActualQuality(lwd.liveset, quality)
+            _actualQuality.value = actualQuality
+
+            // Rebuild the media item with new quality
+            val newMediaItem = PlayableMediaItemBuilder.build(lwd, quality = quality) ?: return@launch
+
+            mutex.withLock {
+                val currentIndex = player.currentMediaItemIndex
+                val instanceId = player.currentMediaItem?.mediaMetadata?.extras?.getString(QueueExtrasKeys.INSTANCE_ID)
+                    ?: return@withLock
+
+                // Replace the current item with the new quality version
+                val withExtras = newMediaItem.withQueueExtras(instanceId = instanceId, manualEntryId = null)
+
+                // Update the item in our internal state
+                val effectiveIndex = _state.value.effective.indexOfFirst { it.instanceId == instanceId }
+                if (effectiveIndex >= 0) {
+                    val oldItem = _state.value.effective[effectiveIndex]
+                    // Update context or manual lane depending on where it came from
+                    val contextIdx = context.indexOfFirst { it.instanceId == instanceId }
+                    if (contextIdx >= 0) {
+                        context[contextIdx] = oldItem.copy(mediaItem = withExtras)
+                    }
+                    val manualIdx = manual.indexOfFirst { it.instanceId == instanceId }
+                    if (manualIdx >= 0) {
+                        manual[manualIdx] = oldItem.copy(mediaItem = withExtras)
+                    }
+                    rebuildEffectiveLocked()
+                }
+
+                // Replace in player
+                player.removeMediaItem(currentIndex)
+                player.addMediaItem(currentIndex, withExtras)
+                player.seekTo(currentIndex, currentPosition)
+                player.prepare()
+                if (wasPlaying) {
+                    player.playWhenReady = true
+                }
+            }
+        }
+    }
+
+    /**
+     * Get the available qualities for the currently playing liveset.
+     */
+    fun getAvailableQualities(): Set<AudioQuality> {
+        val currentLivesetId = _state.value.currentLivesetId ?: return emptySet()
+        val effective = _state.value.effective
+        val currentItem = effective.find { it.livesetId == currentLivesetId }
+        // We need to look up the liveset data - for now return all as a reasonable default
+        // The actual available qualities should be determined from the liveset entity
+        return AudioQuality.entries.toSet()
+    }
+
+    /**
      * Build the context queue for resumption without applying to player.
      * Used by onPlaybackResumption to return items to Media3 while keeping QueueManager state in sync.
      * @return Triple of (mediaItems, startIndex, effectiveQueue) or null if liveset not found
@@ -351,12 +444,15 @@ class QueueManager @Inject constructor(
         return Pair(mediaItems, startIndex)
     }
     
-    private suspend fun resolveQueueItem(livesetId: Long, manualEntryId: Long? = null): QueueItem? {
+    private suspend fun resolveQueueItem(livesetId: Long, manualEntryId: Long? = null, quality: AudioQuality? = null): QueueItem? {
         val lwd = withContext(Dispatchers.IO) { editionRepository.findLiveset(livesetId).first() }
             ?: return null
 
+        // Use the specified quality or fall back to current quality
+        val effectiveQuality = quality ?: _currentQuality.value
+
         // Use centralized builder for consistent MediaItem construction (incl. MIME type)
-        val baseMediaItem = PlayableMediaItemBuilder.build(lwd) ?: return null
+        val baseMediaItem = PlayableMediaItemBuilder.build(lwd, quality = effectiveQuality) ?: return null
 
         val instanceId = java.util.UUID.randomUUID().toString()
         val withExtras = baseMediaItem.withQueueExtras(instanceId = instanceId, manualEntryId = manualEntryId)
@@ -496,8 +592,22 @@ class QueueManager @Inject constructor(
 
                 _state.update { it.copy(currentLivesetId = newLivesetId, currentEffectiveIndex = newIndex) }
             }
-            // Avoid rebuilding the entire playlist here; Player already advanced. No full re-apply.
+
+            // Update actual quality based on the new liveset
+            updateActualQuality()
         }
+    }
+
+    /**
+     * Update the actual quality being played based on the current liveset and requested quality.
+     */
+    private suspend fun updateActualQuality() {
+        val currentLivesetId = _state.value.currentLivesetId ?: return
+        val lwd = withContext(Dispatchers.IO) { editionRepository.findLiveset(currentLivesetId).first() }
+            ?: return
+        val requestedQuality = _currentQuality.value
+        val actual = PlayableMediaItemBuilder.getActualQuality(lwd.liveset, requestedQuality)
+        _actualQuality.value = actual
     }
 
     /**

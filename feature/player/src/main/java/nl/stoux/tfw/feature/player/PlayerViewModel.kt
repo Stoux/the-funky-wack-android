@@ -30,6 +30,12 @@ import nl.stoux.tfw.service.playback.service.manager.LivesetTrackListener
 import nl.stoux.tfw.service.playback.service.session.CustomMediaId
 import nl.stoux.tfw.service.playback.service.manager.UnbindCallback
 import nl.stoux.tfw.service.playback.service.manager.LivesetTrackManager
+import nl.stoux.tfw.service.playback.settings.PlaybackSettingsRepository
+import nl.stoux.tfw.service.playback.settings.PlaybackSettingsRepository.AudioQuality
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.combine
 
 @HiltViewModel
 class PlayerViewModel @Inject constructor(
@@ -37,6 +43,7 @@ class PlayerViewModel @Inject constructor(
     private val livesetTrackManager: LivesetTrackManager,
     private val waveformDownloader: WaveformDownloader,
     private val queueManager: nl.stoux.tfw.service.playback.service.queue.QueueManager,
+    private val playbackSettings: PlaybackSettingsRepository,
 ) : ViewModel() {
 
     private var controller: MediaController? = null
@@ -85,6 +92,29 @@ class PlayerViewModel @Inject constructor(
     val hasCast: StateFlow<Boolean> = _hasCast
     private val _shuffleEnabled = MutableStateFlow(false)
     val shuffleEnabled: StateFlow<Boolean> = _shuffleEnabled
+
+    // Audio quality (from QueueManager - per-session, not the default setting)
+    val audioQuality: StateFlow<AudioQuality?> = queueManager.currentQuality
+
+    // Actual quality being used (may differ if requested quality isn't available)
+    val actualQuality: StateFlow<AudioQuality?> = queueManager.actualQuality
+
+    // Available qualities based on current liveset
+    val availableQualities: StateFlow<Set<AudioQuality>> = _currentLiveset
+        .map { liveset ->
+            val available = mutableSetOf<AudioQuality>()
+            liveset?.liveset?.let { ls ->
+                if (!ls.lqUrl.isNullOrBlank()) available.add(AudioQuality.LOW)
+                if (!ls.hqUrl.isNullOrBlank()) available.add(AudioQuality.HIGH)
+                if (!ls.losslessUrl.isNullOrBlank()) available.add(AudioQuality.LOSSLESS)
+            }
+            available.ifEmpty { AudioQuality.entries.toSet() }
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = AudioQuality.entries.toSet()
+        )
 
     // Liveset track skipping state
     private val _canSkipPrevTrack = MutableStateFlow(false)
@@ -218,6 +248,10 @@ class PlayerViewModel @Inject constructor(
             c.shuffleModeEnabled = newVal
             _shuffleEnabled.value = newVal
         }
+    }
+
+    fun setAudioQuality(quality: AudioQuality) {
+        queueManager.setQuality(quality)
     }
 
     private val _showQueue = MutableStateFlow(false)
