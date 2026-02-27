@@ -43,12 +43,14 @@ android {
             manifestPlaceholders["SENTRY_DSN"] = secrets.getProperty("SENTRY_DSN")
                 ?: System.getenv("SENTRY_DSN")
                 ?: ""
+            manifestPlaceholders["SENTRY_ENVIRONMENT"] = "debug"
         }
         release {
             val secrets = loadSecrets(isProd = true)
             manifestPlaceholders["SENTRY_DSN"] = secrets.getProperty("SENTRY_DSN")
                 ?: System.getenv("SENTRY_DSN")
                 ?: ""
+            manifestPlaceholders["SENTRY_ENVIRONMENT"] = "production"
 
             isMinifyEnabled = false
             proguardFiles(
