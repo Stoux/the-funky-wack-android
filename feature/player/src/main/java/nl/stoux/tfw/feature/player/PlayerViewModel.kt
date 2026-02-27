@@ -32,6 +32,7 @@ import nl.stoux.tfw.service.playback.service.manager.UnbindCallback
 import nl.stoux.tfw.service.playback.service.manager.LivesetTrackManager
 import nl.stoux.tfw.service.playback.download.DownloadRepository
 import nl.stoux.tfw.service.playback.download.DownloadStatus
+import nl.stoux.tfw.service.playback.player.PlayerManager
 import nl.stoux.tfw.service.playback.settings.PlaybackSettingsRepository
 import nl.stoux.tfw.service.playback.settings.PlaybackSettingsRepository.AudioQuality
 import kotlinx.coroutines.flow.SharingStarted
@@ -47,6 +48,7 @@ class PlayerViewModel @Inject constructor(
     private val queueManager: nl.stoux.tfw.service.playback.service.queue.QueueManager,
     private val playbackSettings: PlaybackSettingsRepository,
     private val downloadRepository: DownloadRepository,
+    private val playerManager: PlayerManager,
 ) : ViewModel() {
 
     private var controller: MediaController? = null
@@ -130,6 +132,37 @@ class PlayerViewModel @Inject constructor(
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = AudioQuality.entries.toSet()
         )
+
+    // Whether we're currently casting
+    val isCasting: StateFlow<Boolean> = playerManager.isCasting
+
+    // Cast-compatible qualities based on current liveset (wav, mp3, m4a, aac, flac - not opus)
+    val castCompatibleQualities: StateFlow<Set<AudioQuality>> = _currentLiveset
+        .map { liveset ->
+            val compatible = mutableSetOf<AudioQuality>()
+            liveset?.liveset?.let { ls ->
+                if (!ls.lqUrl.isNullOrBlank() && isCastCompatibleFormat(ls.lqUrl!!)) {
+                    compatible.add(AudioQuality.LOW)
+                }
+                if (!ls.hqUrl.isNullOrBlank() && isCastCompatibleFormat(ls.hqUrl!!)) {
+                    compatible.add(AudioQuality.HIGH)
+                }
+                if (!ls.losslessUrl.isNullOrBlank() && isCastCompatibleFormat(ls.losslessUrl!!)) {
+                    compatible.add(AudioQuality.LOSSLESS)
+                }
+            }
+            compatible
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptySet()
+        )
+
+    private fun isCastCompatibleFormat(url: String): Boolean {
+        val ext = url.substringAfterLast('.', "").lowercase()
+        return ext in listOf("wav", "mp3", "m4a", "aac", "flac")
+    }
 
     // Liveset track skipping state
     private val _canSkipPrevTrack = MutableStateFlow(false)

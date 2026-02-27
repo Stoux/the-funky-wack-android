@@ -84,8 +84,7 @@ object PlayableMediaItemBuilder {
             "aac" -> "audio/aac"
             "flac" -> "audio/flac"
             "wav" -> "audio/wav"
-            "ogg", "oga" -> "audio/ogg"
-            "opus" -> "audio/webm"
+            "ogg", "oga", "opus" -> "audio/ogg"
             else -> null
         }
     }

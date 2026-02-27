@@ -29,6 +29,22 @@ import javax.inject.Singleton
 private const val TAG = "PlayerManager"
 
 /**
+ * Callback for when playback needs to be rebuilt after switching from Cast to local.
+ * Called with the liveset ID and position to resume from.
+ */
+fun interface CastToLocalCallback {
+    suspend fun onSwitchingToLocal(livesetId: Long?, positionMs: Long)
+}
+
+/**
+ * Callback for when switching from local to Cast.
+ * Called with the liveset ID and position to rebuild the queue with Cast-compatible quality.
+ */
+fun interface LocalToCastCallback {
+    suspend fun onSwitchingToCast(livesetId: Long?, positionMs: Long)
+}
+
+/**
  * Minimal PlayerManager for MVP: wraps a local ExoPlayer and exposes it as a StateFlow<Player>.
  * This sets the foundation for later Cast integration without changing Service code.
  */
@@ -43,12 +59,28 @@ class PlayerManager @Inject constructor(
     private val _activePlayer = MutableStateFlow<Player?>(null)
     val activePlayer = _activePlayer.asStateFlow()
 
+    /**
+     * Callback to notify when switching from Cast to local player.
+     * Set by QueueManager to rebuild the queue properly.
+     */
+    var castToLocalCallback: CastToLocalCallback? = null
+
+    /**
+     * Callback to notify when switching from local to Cast player.
+     * Set by QueueManager to rebuild the queue with Cast-compatible quality (lossless/WAV).
+     */
+    var localToCastCallback: LocalToCastCallback? = null
+
     // Track cast status
     private val _isCasting = MutableStateFlow(false)
     val isCasting = _isCasting.asStateFlow()
 
     private var castPlayer: CastPlayer? = null
     private var castContext: CastContext? = null
+
+    // Track position when switching to Cast (fallback if Cast returns 0 on disconnect)
+    private var positionBeforeCast: Long = 0L
+    private var livesetIdBeforeCast: Long? = null
 
     // Current buffer duration in minutes for player creation
     private var currentBufferMinutes: Int = PlaybackSettingsRepository.DEFAULT_BUFFER_MINUTES
@@ -136,36 +168,111 @@ class PlayerManager @Inject constructor(
             Log.e(TAG, "switchToCast: CastContext is null, cannot switch")
             return
         }
+
+        // Save position before switching to Cast (fallback if Cast returns 0 on disconnect)
+        var currentLivesetId: Long? = null
+        var currentPositionMs: Long = 0L
+        runCatching {
+            currentPositionMs = old.currentPosition.coerceAtLeast(0L)
+            positionBeforeCast = currentPositionMs
+            val mediaId = old.currentMediaItem?.mediaId
+            if (mediaId != null && mediaId.startsWith("liveset:")) {
+                val idPart = mediaId.removePrefix("liveset:").split("@").firstOrNull()
+                currentLivesetId = idPart?.toLongOrNull()
+                livesetIdBeforeCast = currentLivesetId
+            }
+            Log.d(TAG, "Saved position before Cast: livesetId=$livesetIdBeforeCast, position=${positionBeforeCast}ms")
+        }
+
         val newCastPlayer = CastPlayer(ctx, DefaultMediaItemConverter())
-        transferPlaybackState(old, newCastPlayer)
         _activePlayer.value = newCastPlayer
         castPlayer = newCastPlayer
         _isCasting.value = true
-        Log.d(TAG, "Switched to CastPlayer successfully")
+
         // Pause the old local player
         (old as? ExoPlayer)?.let { exo ->
             runCatching { exo.pause() }
         }
+
+        // Use callback to rebuild queue with Cast-compatible quality (lossless/WAV)
+        val callback = localToCastCallback
+        if (callback != null && currentLivesetId != null) {
+            Log.d(TAG, "Using callback to rebuild queue for Cast with lossless: liveset=$currentLivesetId at position=${currentPositionMs}ms")
+            scope.launch {
+                callback.onSwitchingToCast(currentLivesetId, currentPositionMs)
+            }
+        } else {
+            // Fallback: transfer existing items (may fail if format not supported)
+            Log.d(TAG, "No callback, falling back to direct transfer")
+            transferPlaybackState(old, newCastPlayer)
+        }
+        Log.d(TAG, "Switched to CastPlayer successfully")
     }
 
     @OptIn(UnstableApi::class)
     private fun switchToLocal() {
         Log.d(TAG, "Switching back to local player...")
         val oldCast = castPlayer
+
+        // Extract current liveset ID and position from Cast before switching
+        // CastPlayer media items don't have localConfiguration.uri, only mediaId
+        var currentLivesetId: Long? = null
+        var currentPositionMs: Long = 0L
+        if (oldCast != null) {
+            runCatching {
+                val mediaId = oldCast.currentMediaItem?.mediaId
+                currentPositionMs = oldCast.currentPosition.coerceAtLeast(0L)
+                // Parse liveset ID from mediaId format: "liveset:<id>" or "liveset:<id>@<timestamp>"
+                if (mediaId != null && mediaId.startsWith("liveset:")) {
+                    val idPart = mediaId.removePrefix("liveset:").split("@").firstOrNull()
+                    currentLivesetId = idPart?.toLongOrNull()
+                }
+                Log.d(TAG, "Cast state: livesetId=$currentLivesetId, position=${currentPositionMs}ms")
+
+                // If Cast position is 0 but we have a saved position, use the fallback
+                // This handles the case where Cast disconnects before playback actually started
+                if (currentPositionMs == 0L && positionBeforeCast > 0L) {
+                    Log.d(TAG, "Cast position is 0, using fallback: livesetId=$livesetIdBeforeCast, position=${positionBeforeCast}ms")
+                    currentPositionMs = positionBeforeCast
+                    if (currentLivesetId == null) {
+                        currentLivesetId = livesetIdBeforeCast
+                    }
+                }
+            }.onFailure { e ->
+                Log.w(TAG, "Failed to extract Cast playback state", e)
+            }
+        }
+
+        // Clear the saved position after using it
+        positionBeforeCast = 0L
+        livesetIdBeforeCast = null
+
         val local = when (val p = _activePlayer.value) {
             is ExoPlayer -> p
             else -> playerFactory.create(currentBufferMinutes).also { _activePlayer.value = it }
         }
+
+        // Release the cast player
         if (oldCast != null) {
-            transferPlaybackState(oldCast, local)
             runCatching { oldCast.release() }.onFailure {
                 Log.w(TAG, "Failed to release CastPlayer", it)
             }
         }
+
         _activePlayer.value = local
         castPlayer = null
         _isCasting.value = false
-        Log.d(TAG, "Switched to local ExoPlayer successfully")
+
+        // Use the callback to properly rebuild the queue with resolved URIs
+        val callback = castToLocalCallback
+        if (callback != null && currentLivesetId != null) {
+            Log.d(TAG, "Using callback to rebuild queue for liveset=$currentLivesetId at position=${currentPositionMs}ms")
+            scope.launch {
+                callback.onSwitchingToLocal(currentLivesetId, currentPositionMs)
+            }
+        } else {
+            Log.d(TAG, "Switched to local ExoPlayer (no callback or no liveset to resume)")
+        }
     }
 
     @OptIn(UnstableApi::class)
@@ -189,7 +296,18 @@ class PlayerManager @Inject constructor(
                     Log.d(TAG, "First item: mediaId=${item.mediaId}, uri=${item.localConfiguration?.uri}, mimeType=${item.localConfiguration?.mimeType}")
                 }
 
-                to.setMediaItems(items, index, position)
+                // Filter to only items with valid URIs (CastPlayer items may not have localConfiguration)
+                val validItems = items.filter { it.localConfiguration?.uri != null }
+                if (validItems.isEmpty()) {
+                    Log.w(TAG, "No valid items to transfer (all items missing URI). Skipping transfer - queue will need to be rebuilt.")
+                    return@runCatching
+                }
+
+                // Adjust index if items were filtered out
+                val adjustedIndex = index.coerceIn(0, validItems.size - 1)
+                Log.d(TAG, "After filtering: ${validItems.size} valid items, adjustedIndex=$adjustedIndex")
+
+                to.setMediaItems(validItems, adjustedIndex, position)
                 to.prepare()
                 to.playWhenReady = playWhenReady
                 Log.d(TAG, "Transfer completed successfully")

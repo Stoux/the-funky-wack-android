@@ -126,6 +126,8 @@ class LivesetTrackManager @Inject constructor(
     }
 
     fun toPreviousTrack() {
+        // Disable track skipping when casting
+        if (playerManager.isCasting.value) return
         val previousTrack = currentTrackSection?.prev ?: return
         val player = boundPlayer ?: return
 
@@ -143,6 +145,8 @@ class LivesetTrackManager @Inject constructor(
     }
 
     fun toNextTrack() {
+        // Disable track skipping when casting
+        if (playerManager.isCasting.value) return
         val nextTrack = currentTrackSection?.next ?: return
         val player = boundPlayer ?: return
 
@@ -161,7 +165,8 @@ class LivesetTrackManager @Inject constructor(
 
     override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
         // Parse the media item & check if it's a valid liveset
-        val mediaId = if (mediaItem == null) null else CustomMediaId.Companion.from(mediaItem.mediaId)
+        // Use fromOrNull to handle empty/invalid media IDs (e.g., from CastPlayer)
+        val mediaId = if (mediaItem == null) null else CustomMediaId.fromOrNull(mediaItem.mediaId)
         val livesetId = mediaId?.getLivesetId()
         if (livesetId == null) {
             currentLiveset = null
@@ -237,11 +242,13 @@ class LivesetTrackManager @Inject constructor(
         val mediaItem = player.currentMediaItem ?: return
         val liveset = currentLiveset ?: return
 
+        val isCasting = playerManager.isCasting.value
+
         // If there are no timestamped tracks for this liveset, ensure base metadata is set and exit
         val hasTimestampedTracks = liveset.tracks.any { it.timestampSec != null }
         if (!hasTimestampedTracks) {
             // Only update player metadata when NOT casting (CastPlayer has limited replaceMediaItem support)
-            if (!playerManager.isCasting.value) {
+            if (!isCasting) {
                 val baseUpdated = mediaItem.buildUpon()
                     .setMediaMetadata(
                         mediaItem.mediaMetadata.buildUpon()
@@ -273,6 +280,13 @@ class LivesetTrackManager @Inject constructor(
         // We've hit a different section! Make sure the underlying track has also changed
         this.currentTrackSection = playingSection
         listenersUpdater.onTrackChanged(playingSection)
+
+        // When casting, disable track navigation buttons (seeking doesn't work reliably on Cast)
+        // but we still show the track info in the UI
+        if (isCasting) {
+            listenersUpdater.onNextPrevTrackStatusChanged(hasPreviousTrack = false, hasNextTrack = false)
+        }
+
         if (currentTrackSection.track?.id == playingSection.track?.id) {
             // Same track somehow. No need to update the player. Might be a different next/prev?
             return
@@ -291,7 +305,7 @@ class LivesetTrackManager @Inject constructor(
         // Only update player metadata when NOT casting.
         // CastPlayer has limited support for replaceMediaItem and may cause issues.
         // When casting, the Cast receiver shows the liveset info anyway.
-        if (!playerManager.isCasting.value) {
+        if (!isCasting) {
             val updatedMediaItem = mediaItem.buildUpon()
                 .setMediaMetadata(
                     mediaItem.mediaMetadata.buildUpon()
@@ -321,7 +335,9 @@ class LivesetTrackManager @Inject constructor(
                     boundPlayer?.let { controller ->
                         report(controller.currentPosition)
                     }
-                    delay(1000)
+                    // Use longer delay when casting - CastPlayer position polling can be slow
+                    val delayMs = if (playerManager.isCasting.value) 3000L else 1000L
+                    delay(delayMs)
                 }
             }
         }

@@ -282,6 +282,8 @@ fun PlayerControls(
     val actualQuality by viewModel.actualQuality.collectAsState()
     val availableQualities by viewModel.availableQualities.collectAsState()
     val allowLossless by viewModel.allowLossless.collectAsState()
+    val isCasting by viewModel.isCasting.collectAsState()
+    val castCompatibleQualities by viewModel.castCompatibleQualities.collectAsState()
     var showQualityDialog by remember { mutableStateOf(false) }
     var showLosslessConfirmDialog by remember { mutableStateOf(false) }
 
@@ -603,11 +605,15 @@ fun PlayerControls(
                     AudioQuality.entries.forEach { quality ->
                         val isSelected = quality == (actualQuality ?: audioQuality)
                         val isAvailable = quality in availableQualities
+                        // Check if this quality is Cast-compatible when casting
+                        val isCastIncompatible = isCasting && quality !in castCompatibleQualities && isAvailable
                         // Lossless requires permission
                         val needsLosslessPermission = quality == AudioQuality.LOSSLESS && !allowLossless
+                        // Disabled if not available OR if casting and not Cast-compatible
+                        val isDisabled = !isAvailable || isCastIncompatible
                         Surface(
                             onClick = {
-                                if (isAvailable) {
+                                if (!isDisabled) {
                                     if (needsLosslessPermission) {
                                         // Show lossless confirmation first
                                         showQualityDialog = false
@@ -619,26 +625,34 @@ fun PlayerControls(
                                 }
                             },
                             color = when {
-                                isSelected -> MaterialTheme.colorScheme.primary
-                                isAvailable -> MaterialTheme.colorScheme.surfaceVariant
+                                isSelected && !isCastIncompatible -> MaterialTheme.colorScheme.primary
+                                !isDisabled -> MaterialTheme.colorScheme.surfaceVariant
                                 else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
                             },
                             shape = RoundedCornerShape(8.dp),
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text(
-                                text = when (quality) {
-                                    AudioQuality.LOW -> "Low Quality (LQ)"
-                                    AudioQuality.HIGH -> "High Quality (HQ)"
-                                    AudioQuality.LOSSLESS -> "Lossless (WAV)" + if (needsLosslessPermission && isAvailable) " ⚠️" else ""
-                                },
-                                modifier = Modifier.padding(16.dp),
-                                color = when {
-                                    !isAvailable -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
-                                    isSelected -> MaterialTheme.colorScheme.onPrimary
-                                    else -> MaterialTheme.colorScheme.onSurface
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Text(
+                                    text = when (quality) {
+                                        AudioQuality.LOW -> "Low Quality (LQ)"
+                                        AudioQuality.HIGH -> "High Quality (HQ)"
+                                        AudioQuality.LOSSLESS -> "Lossless (WAV)" + if (needsLosslessPermission && isAvailable && !isCastIncompatible) " ⚠️" else ""
+                                    },
+                                    color = when {
+                                        isDisabled -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+                                        isSelected -> MaterialTheme.colorScheme.onPrimary
+                                        else -> MaterialTheme.colorScheme.onSurface
+                                    }
+                                )
+                                if (isCastIncompatible) {
+                                    Text(
+                                        text = "Not supported by Cast device",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.error.copy(alpha = 0.7f)
+                                    )
                                 }
-                            )
+                            }
                         }
                     }
                 }

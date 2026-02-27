@@ -19,6 +19,8 @@ import nl.stoux.tfw.core.common.database.dao.ManualQueueDao
 import nl.stoux.tfw.core.common.database.entity.ManualQueueItemEntity
 import nl.stoux.tfw.core.common.repository.EditionRepository
 import nl.stoux.tfw.service.playback.download.DownloadRepository
+import nl.stoux.tfw.service.playback.player.CastToLocalCallback
+import nl.stoux.tfw.service.playback.player.LocalToCastCallback
 import nl.stoux.tfw.service.playback.player.PlayerManager
 import nl.stoux.tfw.service.playback.service.session.CustomMediaId
 import nl.stoux.tfw.service.playback.service.session.PlayableMediaItemBuilder
@@ -67,6 +69,22 @@ class QueueManager @Inject constructor(
     private var boundPlayer: Player? = null
 
     init {
+        // Register as the callback for Cast-to-local transitions
+        playerManager.castToLocalCallback = CastToLocalCallback { livesetId, positionMs ->
+            if (livesetId != null) {
+                Log.d("QueueManager", "Rebuilding queue after Cast disconnect: liveset=$livesetId, position=${positionMs}ms")
+                setContextFromLiveset(livesetId, startPositionMs = positionMs, autoplay = true)
+            }
+        }
+
+        // Register as the callback for local-to-Cast transitions
+        playerManager.localToCastCallback = LocalToCastCallback { livesetId, positionMs ->
+            if (livesetId != null) {
+                Log.d("QueueManager", "Rebuilding queue for Cast: liveset=$livesetId, position=${positionMs}ms")
+                setContextFromLivesetForCast(livesetId, startPositionMs = positionMs)
+            }
+        }
+
         // Load default quality from settings
         scope.launch {
             val defaultQuality = playbackSettings.audioQuality().first()
@@ -307,6 +325,103 @@ class QueueManager @Inject constructor(
         }
     }
 
+    /**
+     * Build and set the context queue for Cast playback.
+     * Uses the user's default quality setting. If that results in Opus (which Cast doesn't support),
+     * falls back to a Cast-compatible alternative.
+     */
+    private fun setContextFromLivesetForCast(livesetId: Long, startPositionMs: Long? = null) {
+        scope.launch {
+            // Start with the user's default quality
+            var castQuality = playbackSettings.audioQuality().first()
+            // If default is lossless but not allowed, use HIGH
+            if (castQuality == AudioQuality.LOSSLESS && !playbackSettings.allowLossless().first()) {
+                castQuality = AudioQuality.HIGH
+            }
+
+            // Check if this quality results in Opus (which Cast doesn't support well)
+            val lwd = withContext(Dispatchers.IO) { editionRepository.findLiveset(livesetId).first() }
+            if (lwd != null) {
+                val url = getUrlForQuality(lwd.liveset, castQuality)
+                if (url != null && !isCastCompatibleFormat(url)) {
+                    // Current quality is Opus, try to find a Cast-compatible alternative
+                    val fallback = findCastCompatibleQuality(lwd.liveset)
+                    if (fallback != null) {
+                        Log.d("QueueManager", "Default quality ($castQuality) is Opus, falling back to $fallback for Cast")
+                        castQuality = fallback
+                    } else {
+                        Log.w("QueueManager", "No Cast-compatible quality available, using $castQuality (may fail)")
+                    }
+                }
+            }
+
+            Log.d("QueueManager", "Cast quality: $castQuality")
+            _currentQuality.value = castQuality
+
+            // Resolve the list of context liveset IDs
+            val contextLivesetIds: List<Long> = try {
+                val editionId = lwd?.liveset?.editionId
+                if (editionId != null) {
+                    val livesets = withContext(Dispatchers.IO) { editionRepository.getLivesets(editionId = editionId).first() }
+                    livesets.map { it.liveset.id }
+                } else {
+                    listOf(livesetId)
+                }
+            } catch (_: Throwable) {
+                listOf(livesetId)
+            }
+
+            // Resolve all items with Cast quality
+            val resolved = withContext(Dispatchers.IO) {
+                contextLivesetIds.mapNotNull { id -> resolveQueueItem(id, manualEntryId = null, quality = castQuality) }
+            }
+            mutex.withLock {
+                context.clear()
+                context.addAll(resolved)
+                rebuildEffectiveLocked(livesetId)
+            }
+            applyToPlayerSafely(startLivesetId = livesetId, startPositionMs = startPositionMs, autoplay = true)
+        }
+    }
+
+    /**
+     * Get the URL for a specific quality.
+     */
+    private fun getUrlForQuality(liveset: nl.stoux.tfw.core.common.database.entity.LivesetEntity, quality: AudioQuality): String? {
+        return when (quality) {
+            AudioQuality.LOSSLESS -> liveset.losslessUrl ?: liveset.hqUrl ?: liveset.lqUrl
+            AudioQuality.HIGH -> liveset.hqUrl ?: liveset.losslessUrl ?: liveset.lqUrl
+            AudioQuality.LOW -> liveset.lqUrl ?: liveset.hqUrl ?: liveset.losslessUrl
+        }
+    }
+
+    /**
+     * Find a Cast-compatible quality for a liveset.
+     * Cast supports: WAV, MP3, AAC (m4a), FLAC. Does NOT reliably support Opus.
+     * Returns null if no Cast-compatible format is available.
+     */
+    private fun findCastCompatibleQuality(liveset: nl.stoux.tfw.core.common.database.entity.LivesetEntity): AudioQuality? {
+        // Check each quality in order of preference
+        if (!liveset.losslessUrl.isNullOrBlank() && isCastCompatibleFormat(liveset.losslessUrl!!)) {
+            return AudioQuality.LOSSLESS
+        }
+        if (!liveset.hqUrl.isNullOrBlank() && isCastCompatibleFormat(liveset.hqUrl!!)) {
+            return AudioQuality.HIGH
+        }
+        if (!liveset.lqUrl.isNullOrBlank() && isCastCompatibleFormat(liveset.lqUrl!!)) {
+            return AudioQuality.LOW
+        }
+        return null
+    }
+
+    /**
+     * Check if a URL points to a Cast-compatible audio format.
+     */
+    private fun isCastCompatibleFormat(url: String): Boolean {
+        val ext = url.substringAfterLast('.', "").lowercase()
+        return ext in listOf("wav", "mp3", "m4a", "aac", "flac")
+    }
+
     fun skipToEffective(index: Int) {
         scope.launch {
             mutex.withLock {
@@ -542,11 +657,6 @@ class QueueManager @Inject constructor(
                 val currentInstanceId = currentItem?.mediaMetadata?.extras?.getString(QueueExtrasKeys.INSTANCE_ID)
                 val currentPosition = player.currentPosition
 
-                player.setMediaItems(mediaItems, /* resetPosition = */ false)
-
-                // Ensure repeat-all so MediaSession transport wraps on Next even at end
-                player.repeatMode = Player.REPEAT_MODE_ALL
-
                 // Compute target index: prefer explicit start effective index, else explicit start id, else match by instance id, else by liveset id, else 0
                 val explicitIndexOverride = startEffectiveIndex?.takeIf { it in effective.indices }
                 val explicitIndex = startLivesetId?.let { id -> effective.indexOfFirst { it.livesetId == id }.takeIf { it >= 0 } }
@@ -555,9 +665,19 @@ class QueueManager @Inject constructor(
                 val targetIndex = explicitIndexOverride ?: explicitIndex ?: instanceIndex ?: livesetIndex ?: 0
 
                 val pos = startPositionMs ?: currentPosition
-                if (targetIndex != player.currentMediaItemIndex || (startPositionMs != null) || (startEffectiveIndex != null)) {
-                    player.seekTo(targetIndex, pos)
+                val needsPositioning = targetIndex != player.currentMediaItemIndex || (startPositionMs != null) || (startEffectiveIndex != null)
+
+                // For CastPlayer, use setMediaItems with built-in start position to avoid seek race condition
+                // CastPlayer returns error 2001 if we try to seek before media is loaded
+                if (needsPositioning) {
+                    player.setMediaItems(mediaItems, targetIndex, pos)
+                } else {
+                    player.setMediaItems(mediaItems, /* resetPosition = */ false)
                 }
+
+                // Ensure repeat-all so MediaSession transport wraps on Next even at end
+                player.repeatMode = Player.REPEAT_MODE_ALL
+
                 // Prepare the new playlist; only auto-play when explicitly requested
                 player.prepare()
                 if (autoplay) {
@@ -596,7 +716,7 @@ class QueueManager @Inject constructor(
                     }
                 }
                 // Update current liveset/index based on the new media item's instance id
-                val newLivesetId = mediaItem?.mediaId?.let { CustomMediaId.from(it).getLivesetId() }
+                val newLivesetId = mediaItem?.mediaId?.let { CustomMediaId.fromOrNull(it)?.getLivesetId() }
                 val newInstanceId = mediaItem?.mediaMetadata?.extras?.getString(QueueExtrasKeys.INSTANCE_ID)
 
                 // Rebuild effective around the new anchor if it is a context item

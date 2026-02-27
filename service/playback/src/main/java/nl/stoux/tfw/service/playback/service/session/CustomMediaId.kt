@@ -50,6 +50,15 @@ data class CustomMediaId(
         val SETTINGS_REFRESH = CustomMediaId(ACTION_REFRESH_LIVESETS)
 
         /**
+         * Parse the Media ID into a [CustomMediaId] object, or null if invalid/empty.
+         */
+        @JvmStatic
+        fun fromOrNull(mediaId: String?): CustomMediaId? {
+            if (mediaId.isNullOrBlank()) return null
+            return runCatching { from(mediaId) }.getOrNull()
+        }
+
+        /**
          * Parse the Media ID into a [CustomMediaId] object.
          */
         @JvmStatic
