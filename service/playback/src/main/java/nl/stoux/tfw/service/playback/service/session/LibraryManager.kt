@@ -292,5 +292,37 @@ class LibraryManager @Inject constructor(
         return list.subList(startIndex, endIndex)
     }
 
+    /**
+     * Search for livesets and editions matching the query.
+     * Returns livesets first, then editions.
+     */
+    fun search(query: String, page: Int, pageSize: Int): List<MediaItem> {
+        if (query.isBlank()) return emptyList()
+
+        val results = mutableListOf<MediaItem>()
+
+        // Search livesets
+        val livesets = runBlocking { editionRepository.searchLivesets(query, limit = 15).first() }
+        results.addAll(livesets.map { livesetMediaItem(it, showEditionInfo = true) })
+
+        // Search editions
+        val editions = runBlocking { editionRepository.searchEditions(query, limit = 5).first() }
+        results.addAll(editions.map { ed ->
+            MediaItem.Builder()
+                .setMediaId("edition:${ed.edition.id}")
+                .setMediaMetadata(
+                    MediaMetadata.Builder()
+                        .setTitle("TFW #${ed.edition.number}: ${ed.edition.tagLine}")
+                        .setArtist("${ed.edition.date} - ${ed.livesets.size} liveset${if (ed.livesets.size == 1) "" else "s"}")
+                        .setArtworkUri(ed.edition.artworkUrl?.toUri())
+                        .setIsBrowsable(true)
+                        .setIsPlayable(false)
+                        .build()
+                )
+                .build()
+        })
+
+        return paginate(results, page, pageSize)
+    }
 
 }

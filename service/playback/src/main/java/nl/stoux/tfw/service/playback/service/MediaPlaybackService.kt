@@ -366,6 +366,30 @@ class MediaPlaybackService : MediaLibraryService() {
             return libraryManager.getQueueBasedForLiveset(livesetId)
         }
 
+        override fun onSearch(
+            session: MediaLibrarySession,
+            browser: MediaSession.ControllerInfo,
+            query: String,
+            params: LibraryParams?
+        ): ListenableFuture<LibraryResult<Void>> {
+            // Get result count and notify client that results are ready
+            val resultCount = libraryManager.search(query, 0, Int.MAX_VALUE).size
+            session.notifySearchResultChanged(browser, query, resultCount, params)
+            return Futures.immediateFuture(LibraryResult.ofVoid())
+        }
+
+        override fun onGetSearchResult(
+            session: MediaLibrarySession,
+            browser: MediaSession.ControllerInfo,
+            query: String,
+            page: Int,
+            pageSize: Int,
+            params: LibraryParams?
+        ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> {
+            val results = libraryManager.search(query, page, pageSize)
+            return Futures.immediateFuture(LibraryResult.ofItemList(ImmutableList.copyOf(results), params))
+        }
+
     }
 
     private inner class TrackListener: LivesetTrackListener{

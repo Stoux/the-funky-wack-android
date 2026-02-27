@@ -133,4 +133,26 @@ interface EditionDao {
 
     @Query("DELETE FROM tracks WHERE livesetId IN (:livesetIds)")
     suspend fun deleteTracksByLivesetIds(livesetIds: List<Long>)
+
+    // Search queries
+    @Transaction
+    @Query(
+        "SELECT ls.* FROM livesets ls " +
+            "INNER JOIN editions e ON ls.editionId = e.id " +
+            "WHERE ls.title LIKE '%' || :query || '%' " +
+            "OR ls.artistName LIKE '%' || :query || '%' " +
+            "ORDER BY CAST(e.number AS INTEGER) DESC, lineupOrder ASC " +
+            "LIMIT :limit"
+    )
+    fun searchLivesets(query: String, limit: Int = 20): Flow<List<LivesetWithDetails>>
+
+    @Transaction
+    @Query(
+        "SELECT * FROM editions " +
+            "WHERE tagLine LIKE '%' || :query || '%' " +
+            "OR number LIKE '%' || :query || '%' " +
+            "ORDER BY CAST(number AS INTEGER) DESC " +
+            "LIMIT :limit"
+    )
+    fun searchEditions(query: String, limit: Int = 10): Flow<List<EditionWithContent>>
 }

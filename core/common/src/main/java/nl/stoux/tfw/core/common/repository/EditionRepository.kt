@@ -31,6 +31,10 @@ interface EditionRepository {
 
     fun getLivesets(editionId: Long, page: Int = 0, pageSize: Int = Int.MAX_VALUE): Flow<List<LivesetWithDetails>>
 
+    fun searchLivesets(query: String, limit: Int = 20): Flow<List<LivesetWithDetails>>
+
+    fun searchEditions(query: String, limit: Int = 10): Flow<List<EditionWithContent>>
+
     suspend fun refreshEditions()
 }
 
@@ -65,6 +69,10 @@ class EditionRepositoryImpl @Inject constructor(
     override fun getLivesets(page: Int, pageSize: Int): Flow<List<LivesetWithDetails>> = dao.getLivesets(page, pageSize)
 
     override fun getLivesets(editionId: Long, page: Int, pageSize: Int): Flow<List<LivesetWithDetails>> = dao.getEditionLivesets(editionId, page, pageSize)
+
+    override fun searchLivesets(query: String, limit: Int): Flow<List<LivesetWithDetails>> = dao.searchLivesets(query, limit)
+
+    override fun searchEditions(query: String, limit: Int): Flow<List<EditionWithContent>> = dao.searchEditions(query, limit)
 
     override suspend fun refreshEditions(): Unit = withContext(Dispatchers.IO) {
         try {
