@@ -1,9 +1,20 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.hilt)
     alias(libs.plugins.ksp)
+    alias(libs.plugins.sentry)
+}
+
+// Load secrets.properties for API keys (not tracked in git)
+val secretsProperties = Properties().apply {
+    val secretsFile = rootProject.file("secrets.properties")
+    if (secretsFile.exists()) {
+        load(secretsFile.inputStream())
+    }
 }
 
 android {
@@ -20,6 +31,11 @@ android {
         versionName = providers.gradleProperty("APP_VERSION_NAME").get()
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // Sentry DSN from secrets.properties or env var (not tracked in git)
+        manifestPlaceholders["SENTRY_DSN"] = secretsProperties.getProperty("SENTRY_DSN")
+            ?: System.getenv("SENTRY_DSN")
+            ?: ""
     }
 
     buildTypes {
@@ -72,6 +88,9 @@ dependencies {
     implementation(libs.hilt.android)
     implementation(libs.hilt.navigation.compose)
     ksp(libs.hilt.compiler)
+
+    // Sentry Compose integration
+    implementation(libs.sentry.compose.android)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

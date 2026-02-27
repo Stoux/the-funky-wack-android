@@ -33,6 +33,10 @@ carApp = "1.7.0"
 # TV Compose
 tvFoundation = "1.0.0-alpha12"
 tvMaterial = "1.0.1"
+# Sentry
+sentry = "8.33.0"
+sentryPlugin = "6.1.0"
+sentryComposeAndroid = "8.33.0"
 # Plugins
 ksp = "2.2.20-2.0.3"
 media = "1.6.0"
@@ -92,6 +96,8 @@ androidx-media = { group = "androidx.media", name = "media", version.ref = "medi
 # TV Compose
 androidx-tv-foundation = { group = "androidx.tv", name = "tv-foundation", version.ref = "tvFoundation" }
 androidx-tv-material = { group = "androidx.tv", name = "tv-material", version.ref = "tvMaterial" }
+# Sentry
+sentry-compose-android = { group = "io.sentry", name = "sentry-compose-android", version.ref = "sentryComposeAndroid" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
@@ -102,4 +108,5 @@ android-library = { id = "com.android.library", version.ref = "agp" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 hilt = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
+sentry = { id = "io.sentry.android.gradle", version.ref = "sentryPlugin" }
 

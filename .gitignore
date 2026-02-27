@@ -14,7 +14,9 @@
 .externalNativeBuild
 .cxx
 local.properties
+secrets.properties
 
 # Release folders
 /automotive/release/
 /app/release/
+/tv/release/
