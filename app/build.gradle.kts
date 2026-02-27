@@ -9,11 +9,15 @@ plugins {
     alias(libs.plugins.sentry)
 }
 
-// Load secrets.properties for API keys (not tracked in git)
-val secretsProperties = Properties().apply {
-    val secretsFile = rootProject.file("secrets.properties")
-    if (secretsFile.exists()) {
-        load(secretsFile.inputStream())
+// Load secrets for API keys (not tracked in git)
+// Uses secrets.prod.properties for release builds, falls back to secrets.properties
+fun loadSecrets(isProd: Boolean): Properties = Properties().apply {
+    val prodFile = rootProject.file("secrets.prod.properties")
+    val defaultFile = rootProject.file("secrets.properties")
+
+    when {
+        isProd && prodFile.exists() -> load(prodFile.inputStream())
+        defaultFile.exists() -> load(defaultFile.inputStream())
     }
 }
 
@@ -31,15 +35,21 @@ android {
         versionName = providers.gradleProperty("APP_VERSION_NAME").get()
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-
-        // Sentry DSN from secrets.properties or env var (not tracked in git)
-        manifestPlaceholders["SENTRY_DSN"] = secretsProperties.getProperty("SENTRY_DSN")
-            ?: System.getenv("SENTRY_DSN")
-            ?: ""
     }
 
     buildTypes {
+        debug {
+            val secrets = loadSecrets(isProd = false)
+            manifestPlaceholders["SENTRY_DSN"] = secrets.getProperty("SENTRY_DSN")
+                ?: System.getenv("SENTRY_DSN")
+                ?: ""
+        }
         release {
+            val secrets = loadSecrets(isProd = true)
+            manifestPlaceholders["SENTRY_DSN"] = secrets.getProperty("SENTRY_DSN")
+                ?: System.getenv("SENTRY_DSN")
+                ?: ""
+
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),

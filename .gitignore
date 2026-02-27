@@ -15,6 +15,7 @@
 .cxx
 local.properties
 secrets.properties
+secrets.prod.properties
 
 # Release folders
 /automotive/release/
