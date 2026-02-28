@@ -46,6 +46,13 @@ class EditionRepositoryImpl @Inject constructor(
 
     private val dao: EditionDao get() = db.editionDao()
 
+    // Prevent concurrent/duplicate refresh calls
+    @Volatile
+    private var isRefreshing: Boolean = false
+    @Volatile
+    private var lastRefreshTimeMs: Long = 0L
+    private val minRefreshIntervalMs: Long = 5_000L // Don't refresh more than once per 5 seconds
+
     override fun getEditions(): Flow<List<EditionWithContent>> =
         dao.getEditionsWithContent().map { editions ->
             // Ensure editions are sorted by numeric number DESC
@@ -75,6 +82,12 @@ class EditionRepositoryImpl @Inject constructor(
     override fun searchEditions(query: String, limit: Int): Flow<List<EditionWithContent>> = dao.searchEditions(query, limit)
 
     override suspend fun refreshEditions(): Unit = withContext(Dispatchers.IO) {
+        // Skip if already refreshing or refreshed recently
+        val now = System.currentTimeMillis()
+        if (isRefreshing || (now - lastRefreshTimeMs) < minRefreshIntervalMs) {
+            return@withContext
+        }
+        isRefreshing = true
         try {
             val dtos = api.getEditions()
 
@@ -130,9 +143,12 @@ class EditionRepositoryImpl @Inject constructor(
                 if (newTracks.isNotEmpty()) dao.upsertTracks(newTracks)
             }
 
+            lastRefreshTimeMs = System.currentTimeMillis()
         } catch (e: Throwable) {
             Log.w("TfwDao", "Failed to refresh editions", e)
             // Intentionally swallow to keep UI working with stale data
+        } finally {
+            isRefreshing = false
         }
     }
 }

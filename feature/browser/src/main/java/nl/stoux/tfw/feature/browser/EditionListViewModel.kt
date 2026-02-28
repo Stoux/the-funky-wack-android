@@ -106,6 +106,7 @@ class EditionListViewModel @Inject constructor(
 
     init {
         // Kick off a refresh on startup (stale-while-revalidate)
+        // Repository handles deduplication if already refreshing
         viewModelScope.launch {
             repository.refreshEditions()
         }
