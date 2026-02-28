@@ -32,11 +32,13 @@ import kotlinx.coroutines.runBlocking
 import nl.stoux.tfw.service.playback.player.PlayerManager
 import nl.stoux.tfw.service.playback.service.manager.LivesetTrackListener
 import nl.stoux.tfw.service.playback.service.manager.LivesetTrackManager
+import nl.stoux.tfw.service.playback.service.manager.NotificationUpdateCallback
 import nl.stoux.tfw.service.playback.service.manager.UnbindCallback
 import nl.stoux.tfw.service.playback.service.queue.QueueManager
 import nl.stoux.tfw.service.playback.service.resume.PlaybackResumeCoordinator
 import nl.stoux.tfw.service.playback.service.resume.PlaybackStateRepository
 import nl.stoux.tfw.service.playback.service.session.CustomMediaId
+import nl.stoux.tfw.service.playback.service.session.LibraryChildrenChangedCallback
 import nl.stoux.tfw.service.playback.service.session.LibraryManager
 import javax.inject.Inject
 
@@ -105,6 +107,27 @@ class MediaPlaybackService : MediaLibraryService() {
 
         // Add listener
         trackManagerUnbindCallback = trackManager.bind(TrackListener())
+
+        // Wire up library children changed callback for refresh status updates
+        libraryManager.childrenChangedCallback = LibraryChildrenChangedCallback { parentId, itemCount ->
+            serviceMainScope.launch {
+                mediaLibrarySession?.notifyChildrenChanged(parentId, itemCount, null)
+            }
+        }
+
+        // Wire up notification update callback for track metadata changes
+        // replaceMediaItem() doesn't automatically notify all MediaSession controllers,
+        // so we broadcast a custom command to wake them up (fixes Android Auto not updating)
+        trackManager.notificationUpdateCallback = NotificationUpdateCallback {
+            serviceMainScope.launch {
+                // Broadcast custom command to wake up all controllers (Android Auto)
+                // This triggers controllers to re-read the player's current metadata
+                mediaLibrarySession?.broadcastCustomCommand(
+                    SessionCommand("metadata_changed", Bundle.EMPTY),
+                    Bundle.EMPTY
+                )
+            }
+        }
 
         // When service starts: refresh the editions & notify the session that its root options have changed
         serviceIOScope.launch {

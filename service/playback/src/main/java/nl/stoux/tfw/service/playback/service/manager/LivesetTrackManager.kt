@@ -22,6 +22,10 @@ import javax.inject.Singleton
 /**
  * Manager that provides utility methods for skipping tracks inside the current playlist (if supported)
  */
+fun interface NotificationUpdateCallback {
+    fun onMetadataChanged()
+}
+
 @Singleton
 class LivesetTrackManager @Inject constructor(
     private val playerManager: PlayerManager,
@@ -31,6 +35,9 @@ class LivesetTrackManager @Inject constructor(
 
     private val serviceIOScope = CoroutineScope(Dispatchers.IO)
     private val serviceMainScope = CoroutineScope(Dispatchers.Main)
+
+    /** Callback to trigger notification update after metadata changes */
+    var notificationUpdateCallback: NotificationUpdateCallback? = null
 
     private var currentLiveset: LivesetWithDetails? = null
     private var currentLivesetId: Long? = null
@@ -130,6 +137,7 @@ class LivesetTrackManager @Inject constructor(
         if (playerManager.isCasting.value) return
         val previousTrack = currentTrackSection?.prev ?: return
         val player = boundPlayer ?: return
+        val liveset = currentLiveset ?: return
 
         // Optimistically update UI state before seek (important for Cast where seek is async)
         currentTrackSection = previousTrack
@@ -139,6 +147,8 @@ class LivesetTrackManager @Inject constructor(
 
         runCatching {
             player.seekTo(player.currentMediaItemIndex, previousTrack.startAt)
+            // Update metadata and notify controllers
+            updatePlayerMetadataForTrack(player, liveset, previousTrack.track)
         }.onFailure {
             Log.e("LivesetTrackManager", "Failed to seek to previous track", it)
         }
@@ -149,6 +159,7 @@ class LivesetTrackManager @Inject constructor(
         if (playerManager.isCasting.value) return
         val nextTrack = currentTrackSection?.next ?: return
         val player = boundPlayer ?: return
+        val liveset = currentLiveset ?: return
 
         // Optimistically update UI state before seek (important for Cast where seek is async)
         currentTrackSection = nextTrack
@@ -158,9 +169,41 @@ class LivesetTrackManager @Inject constructor(
 
         runCatching {
             player.seekTo(player.currentMediaItemIndex, nextTrack.startAt)
+            // Update metadata and notify controllers
+            updatePlayerMetadataForTrack(player, liveset, nextTrack.track)
         }.onFailure {
             Log.e("LivesetTrackManager", "Failed to seek to next track", it)
         }
+    }
+
+    /**
+     * Updates the player's current MediaItem metadata and triggers notification update.
+     */
+    private fun updatePlayerMetadataForTrack(
+        player: Player,
+        liveset: LivesetWithDetails,
+        track: TrackEntity?
+    ) {
+        val mediaItem = player.currentMediaItem ?: return
+
+        var title = liveset.liveset.title
+        var artist = liveset.liveset.artistName
+        if (track != null) {
+            artist = title
+            title = track.title
+        }
+
+        val updatedMediaItem = mediaItem.buildUpon()
+            .setMediaMetadata(
+                mediaItem.mediaMetadata.buildUpon()
+                    .setTitle(title)
+                    .setArtist(artist)
+                    .build()
+            )
+            .build()
+
+        player.replaceMediaItem(player.currentMediaItemIndex, updatedMediaItem)
+        notificationUpdateCallback?.onMetadataChanged()
     }
 
     override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
@@ -258,6 +301,7 @@ class LivesetTrackManager @Inject constructor(
                     )
                     .build()
                 player.replaceMediaItem(player.currentMediaItemIndex, baseUpdated)
+                notificationUpdateCallback?.onMetadataChanged()
             }
             listenersUpdater.onTrackChanged(null)
             listenersUpdater.onNextPrevTrackStatusChanged(hasPreviousTrack = false, hasNextTrack = false)
@@ -316,6 +360,7 @@ class LivesetTrackManager @Inject constructor(
                 .build()
 
             player.replaceMediaItem(player.currentMediaItemIndex, updatedMediaItem)
+            notificationUpdateCallback?.onMetadataChanged()
         }
     }
 
