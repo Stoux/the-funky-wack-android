@@ -2,9 +2,14 @@ package nl.stoux.tfw.core.common.repository
 
 import android.util.Log
 import androidx.room.withTransaction
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.withContext
 import nl.stoux.tfw.core.common.database.AppDatabase
 import nl.stoux.tfw.core.common.database.dao.EditionDao
@@ -36,6 +41,13 @@ interface EditionRepository {
     fun searchEditions(query: String, limit: Int = 10): Flow<List<EditionWithContent>>
 
     suspend fun refreshEditions()
+
+    // Cached state for synchronous access (used by Media3 callbacks)
+    val cachedEditions: StateFlow<List<EditionWithContent>>
+    val cachedLivesets: StateFlow<List<LivesetWithDetails>>
+
+    /** Get a cached liveset by ID synchronously. Returns null if not in cache. */
+    fun getCachedLiveset(id: Long): LivesetWithDetails?
 }
 
 class EditionRepositoryImpl @Inject constructor(
@@ -46,12 +58,25 @@ class EditionRepositoryImpl @Inject constructor(
 
     private val dao: EditionDao get() = db.editionDao()
 
+    // Scope for keeping StateFlows hot (singleton lifetime)
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
     // Prevent concurrent/duplicate refresh calls
     @Volatile
     private var isRefreshing: Boolean = false
     @Volatile
     private var lastRefreshTimeMs: Long = 0L
     private val minRefreshIntervalMs: Long = 5_000L // Don't refresh more than once per 5 seconds
+
+    // Cached StateFlows for synchronous access by Media3 callbacks
+    override val cachedEditions: StateFlow<List<EditionWithContent>> = getEditions()
+        .stateIn(scope, SharingStarted.Eagerly, emptyList())
+
+    override val cachedLivesets: StateFlow<List<LivesetWithDetails>> = getLivesets()
+        .stateIn(scope, SharingStarted.Eagerly, emptyList())
+
+    override fun getCachedLiveset(id: Long): LivesetWithDetails? =
+        cachedLivesets.value.find { it.liveset.id == id }
 
     override fun getEditions(): Flow<List<EditionWithContent>> =
         dao.getEditionsWithContent().map { editions ->

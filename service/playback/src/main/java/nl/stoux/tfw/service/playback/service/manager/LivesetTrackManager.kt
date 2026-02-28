@@ -7,10 +7,9 @@ import androidx.media3.common.Player
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import nl.stoux.tfw.core.common.database.dao.LivesetWithDetails
 import nl.stoux.tfw.core.common.database.entity.TrackEntity
 import nl.stoux.tfw.core.common.repository.EditionRepository
@@ -228,9 +227,9 @@ class LivesetTrackManager @Inject constructor(
         currentLiveset = null
         currentTrackSection = null
         
-        // Find that liveset (async)
+        // Find that liveset from cache
         serviceIOScope.launch {
-            val liveset = runBlocking { editionRepository.findLiveset(livesetId).first() }
+            val liveset = editionRepository.getCachedLiveset(livesetId)
             val foundLivesetId = liveset?.liveset?.id
             if (foundLivesetId == null || foundLivesetId != currentLivesetId) {
                 return@launch
@@ -424,7 +423,14 @@ class LivesetTrackManager @Inject constructor(
         val callback: (hasPreviousTrack: Boolean, hasNextTrack: Boolean) -> Unit,
     )
 
-
+    /**
+     * Release coroutine scopes. Call from MediaPlaybackService.onDestroy().
+     */
+    fun release() {
+        progressReporter.stop()
+        serviceIOScope.cancel()
+        serviceMainScope.cancel()
+    }
 
 }
 

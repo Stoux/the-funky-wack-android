@@ -4,6 +4,7 @@ import android.util.Log
 import androidx.collection.LruCache
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import javax.inject.Singleton
@@ -42,6 +43,14 @@ class WaveformDownloader @javax.inject.Inject constructor(
 
             }
         }
+    }
+
+    /**
+     * Release coroutine scope and clear cache.
+     */
+    fun release() {
+        serviceIOScope.cancel()
+        cache.evictAll()
     }
 
 }

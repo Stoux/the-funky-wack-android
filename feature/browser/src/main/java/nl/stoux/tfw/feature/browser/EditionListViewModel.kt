@@ -172,19 +172,19 @@ class EditionListViewModel @Inject constructor(
      * Returns null if the size cannot be determined.
      */
     private fun fetchFileSize(url: String): Long? {
+        var connection: HttpURLConnection? = null
         return try {
-            val connection = URL(url).openConnection() as HttpURLConnection
+            connection = URL(url).openConnection() as HttpURLConnection
             connection.requestMethod = "HEAD"
             connection.connectTimeout = 10_000
             connection.readTimeout = 10_000
             connection.connect()
-
             val contentLength = connection.contentLengthLong
-            connection.disconnect()
-
             if (contentLength > 0) contentLength else null
         } catch (e: Exception) {
             null
+        } finally {
+            connection?.disconnect()
         }
     }
 

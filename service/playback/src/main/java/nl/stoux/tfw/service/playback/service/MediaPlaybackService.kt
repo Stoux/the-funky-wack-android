@@ -183,6 +183,10 @@ class MediaPlaybackService : MediaLibraryService() {
         mediaLibrarySession?.release()
         mediaLibrarySession = null
 
+        // Release singleton managers
+        queueManager.release()
+        trackManager.release()
+
         // Detach coordinator before releasing player
         serviceIOScope.launch {
             runBlocking { resumeCoordinator.detach(playerManager.currentPlayer()) }

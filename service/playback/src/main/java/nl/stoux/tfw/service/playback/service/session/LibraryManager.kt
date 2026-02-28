@@ -7,9 +7,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import nl.stoux.tfw.core.common.database.dao.EditionWithContent
 import nl.stoux.tfw.core.common.database.dao.LivesetWithDetails
 import nl.stoux.tfw.core.common.repository.EditionRepository
@@ -200,21 +198,20 @@ class LibraryManager @Inject constructor(
 
     private fun getAllLivesets(page: Int, pageSize: Int): List<MediaItem> {
         sessionSettings.queueEditionLivesetsOnly = false
-        val livesets = runBlocking { editionRepository.getLivesets(page, pageSize).first() }
-
+        val livesets = paginate(editionRepository.cachedLivesets.value, page, pageSize)
         return livesets.map { liveset -> livesetMediaItem(liveset, true) }
     }
 
     private fun getEditionLivesets(mediaId: CustomMediaId, page: Int, pageSize: Int): List<MediaItem> {
         val editionId = mediaId.getEditionId() ?: throw IllegalArgumentException("Invalid Edition ID Media ID passed")
-        val livesets = runBlocking { editionRepository.getLivesets(editionId, page, pageSize).first() }
-        return livesets.map { liveset -> livesetMediaItem(liveset) }
+        val livesets = editionRepository.cachedLivesets.value.filter { it.edition.id == editionId }
+        return paginate(livesets, page, pageSize).map { liveset -> livesetMediaItem(liveset) }
     }
 
     @SuppressLint("DefaultLocale")
     private fun getLivesetTracks(mediaId: CustomMediaId, page: Int, pageSize: Int): List<MediaItem> {
         val livesetId = mediaId.getLivesetId() ?: throw IllegalArgumentException("Invalid Liveset ID Media ID passed")
-        val liveset = runBlocking { editionRepository.findLiveset(livesetId).first() } ?: throw IllegalArgumentException("Liveset not found")
+        val liveset = editionRepository.getCachedLiveset(livesetId) ?: throw IllegalArgumentException("Liveset not found")
 
         return liveset.tracks.map { track ->
             val trackMediaId = CustomMediaId.forEntity(track)
@@ -264,13 +261,14 @@ class LibraryManager @Inject constructor(
 
     fun getQueueBasedForLiveset(id: Long): List<MediaItem> {
         // Find the liveset
-        val liveset = runBlocking { editionRepository.findLiveset(id).first() }
-        if (liveset == null) throw IllegalArgumentException("Unknown liveset: $id")
+        val liveset = editionRepository.getCachedLiveset(id)
+            ?: throw IllegalArgumentException("Unknown liveset: $id")
 
         // Fetch all other livesets that should be in the queue
+        val allLivesets = editionRepository.cachedLivesets.value
         val livesetQueue = when {
-            sessionSettings.queueEditionLivesetsOnly -> runBlocking { editionRepository.getLivesets(liveset.edition.id).first() }
-            else -> runBlocking { editionRepository.getLivesets().first() }
+            sessionSettings.queueEditionLivesetsOnly -> allLivesets.filter { it.edition.id == liveset.edition.id }
+            else -> allLivesets
         }.filter { it ->
             // Filter to only playable livesets
             val liveset = it.liveset
@@ -296,9 +294,8 @@ class LibraryManager @Inject constructor(
     fun livesetMediaItem(
         id: Long,
     ): MediaItem {
-        val lwd = runBlocking { editionRepository.findLiveset(id).first() }
-        if (lwd == null) throw IllegalArgumentException("Unknown liveset: $id")
-
+        val lwd = editionRepository.getCachedLiveset(id)
+            ?: throw IllegalArgumentException("Unknown liveset: $id")
         return livesetMediaItem(lwd)
     }
 
@@ -344,7 +341,7 @@ class LibraryManager @Inject constructor(
 
 
     private fun loadEditions(): List<EditionWithContent> =
-        runBlocking { editionRepository.getEditions().first() }
+        editionRepository.cachedEditions.value
 
 
 
@@ -365,13 +362,24 @@ class LibraryManager @Inject constructor(
         if (query.isBlank()) return emptyList()
 
         val results = mutableListOf<MediaItem>()
+        val queryLower = query.lowercase()
 
-        // Search livesets
-        val livesets = runBlocking { editionRepository.searchLivesets(query, limit = 15).first() }
+        // Search livesets from cache
+        val livesets = editionRepository.cachedLivesets.value
+            .filter { lwd ->
+                lwd.liveset.title.lowercase().contains(queryLower) ||
+                lwd.liveset.artistName.lowercase().contains(queryLower)
+            }
+            .take(15)
         results.addAll(livesets.map { livesetMediaItem(it, showEditionInfo = true) })
 
-        // Search editions
-        val editions = runBlocking { editionRepository.searchEditions(query, limit = 5).first() }
+        // Search editions from cache
+        val editions = editionRepository.cachedEditions.value
+            .filter { ed ->
+                ed.edition.tagLine?.lowercase()?.contains(queryLower) == true ||
+                ed.edition.number.lowercase().contains(queryLower)
+            }
+            .take(5)
         results.addAll(editions.map { ed ->
             MediaItem.Builder()
                 .setMediaId("edition:${ed.edition.id}")

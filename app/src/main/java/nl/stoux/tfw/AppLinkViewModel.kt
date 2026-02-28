@@ -2,15 +2,16 @@ package nl.stoux.tfw
 
 import android.net.Uri
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.launch
 import nl.stoux.tfw.core.common.database.dao.LivesetWithDetails
 import nl.stoux.tfw.core.common.repository.EditionRepository
 
@@ -37,8 +38,10 @@ class AppLinkViewModel @Inject constructor(
             return
         }
         // Resolve liveset and expose if playable
-        CoroutineScope(Dispatchers.IO).launch {
-            val lwd = runCatching { editionRepository.findLiveset(deepLink.livesetId).first() }.getOrNull()
+        viewModelScope.launch {
+            val lwd = withContext(Dispatchers.IO) {
+                runCatching { editionRepository.findLiveset(deepLink.livesetId).first() }.getOrNull()
+            }
             _resolved.value = if (lwd != null && hasPlayable(lwd)) {
                 ResolvedDeepLink(deepLink, lwd)
             } else {

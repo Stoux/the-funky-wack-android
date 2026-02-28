@@ -7,6 +7,7 @@ import androidx.media3.common.Player
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
@@ -765,6 +766,13 @@ class QueueManager @Inject constructor(
         _state.update { it.copy(isPlaying = isPlaying) }
     }
 
+    /**
+     * Release coroutine scopes. Call from MediaPlaybackService.onDestroy().
+     */
+    fun release() {
+        scope.cancel()
+        ioScope.cancel()
+    }
 
     // endregion
 }
