@@ -33,6 +33,8 @@ carApp = "1.7.0"
 # TV Compose
 tvFoundation = "1.0.0-alpha12"
 tvMaterial = "1.0.1"
+# Play In-App Update
+playAppUpdate = "2.1.0"
 # Sentry
 sentry = "8.33.0"
 sentryPlugin = "6.1.0"
@@ -98,6 +100,9 @@ androidx-tv-foundation = { group = "androidx.tv", name = "tv-foundation", versio
 androidx-tv-material = { group = "androidx.tv", name = "tv-material", version.ref = "tvMaterial" }
 # Sentry
 sentry-compose-android = { group = "io.sentry", name = "sentry-compose-android", version.ref = "sentryComposeAndroid" }
+# Play In-App Update
+play-app-update = { group = "com.google.android.play", name = "app-update", version.ref = "playAppUpdate" }
+play-app-update-ktx = { group = "com.google.android.play", name = "app-update-ktx", version.ref = "playAppUpdate" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

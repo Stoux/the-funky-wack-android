@@ -68,6 +68,11 @@ import nl.stoux.tfw.service.playback.service.session.CustomMediaId
 import nl.stoux.tfw.core.common.database.dao.LivesetWithDetails
 import kotlinx.coroutines.flow.first
 import nl.stoux.tfw.feature.player.util.formatTime
+import com.google.android.play.core.appupdate.AppUpdateManagerFactory
+import com.google.android.play.core.appupdate.AppUpdateOptions
+import com.google.android.play.core.install.model.AppUpdateType
+import com.google.android.play.core.install.model.UpdateAvailability
+import androidx.activity.result.IntentSenderRequest
 
 @AndroidEntryPoint
 @OptIn(ExperimentalMaterial3Api::class)
@@ -81,6 +86,11 @@ class MainActivity : FragmentActivity() {
 
     // Signal from Activity lifecycle (e.g., notification tap) to Compose to open the player
     private val showPlayerRequest = mutableStateOf(false)
+
+    // App update launcher for Play In-App Updates
+    private val updateLauncher = registerForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.StartIntentSenderForResult()
+    ) { /* User completed or cancelled update */ }
 
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -97,6 +107,12 @@ class MainActivity : FragmentActivity() {
         enableEdgeToEdge()
         setContent {
             TheFunkyWackTheme {
+                // Check for app updates after a delay on startup
+                LaunchedEffect(Unit) {
+                    delay(15000)
+                    checkForAppUpdate()
+                }
+
                 val isPlaying by playerViewModel.isPlaying.collectAsState()
                 val nowTitle by playerViewModel.nowPlayingTitle.collectAsState()
                 val progress by playerViewModel.progress.collectAsState()
@@ -328,6 +344,22 @@ class MainActivity : FragmentActivity() {
         handleIncomingViewIntent(intent, finishIfBounced = false)
         if (intent.action == MediaPlaybackService.ACTION_SHOW_PLAYER) {
             showPlayerRequest.value = true
+        }
+    }
+
+    private fun checkForAppUpdate() {
+        val appUpdateManager = AppUpdateManagerFactory.create(this)
+        appUpdateManager.appUpdateInfo.addOnSuccessListener { appUpdateInfo ->
+            if (appUpdateInfo.updateAvailability() == UpdateAvailability.UPDATE_AVAILABLE
+                && appUpdateInfo.isUpdateTypeAllowed(AppUpdateType.FLEXIBLE)
+            ) {
+                // Start flexible update flow (downloads in background, less intrusive)
+                appUpdateManager.startUpdateFlowForResult(
+                    appUpdateInfo,
+                    updateLauncher,
+                    AppUpdateOptions.defaultOptions(AppUpdateType.FLEXIBLE)
+                )
+            }
         }
     }
 }

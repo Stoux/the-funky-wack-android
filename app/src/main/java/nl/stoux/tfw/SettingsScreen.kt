@@ -1,6 +1,7 @@
 package nl.stoux.tfw
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -35,6 +36,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
+import android.app.Activity
+import android.content.Intent
+import android.net.Uri
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.platform.LocalContext
+import com.google.android.play.core.appupdate.AppUpdateManagerFactory
+import com.google.android.play.core.appupdate.AppUpdateOptions
+import com.google.android.play.core.install.model.AppUpdateType
+import com.google.android.play.core.install.model.UpdateAvailability
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -297,6 +309,69 @@ fun SettingsScreen(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+
+        Spacer(modifier = Modifier.height(32.dp))
+
+        // Version info with update check
+        val context = LocalContext.current
+        val activity = context as? Activity
+        val versionName = remember {
+            runCatching {
+                context.packageManager.getPackageInfo(context.packageName, 0).versionName
+            }.getOrNull() ?: "Unknown"
+        }
+        var isCheckingUpdate by remember { mutableStateOf(false) }
+
+        val updateLauncher = rememberLauncherForActivityResult(
+            ActivityResultContracts.StartIntentSenderForResult()
+        ) { result ->
+            if (result.resultCode != Activity.RESULT_OK) {
+                Toast.makeText(context, "Update cancelled", Toast.LENGTH_SHORT).show()
+            }
+        }
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(enabled = !isCheckingUpdate && activity != null) {
+                    isCheckingUpdate = true
+                    val appUpdateManager = AppUpdateManagerFactory.create(context)
+                    appUpdateManager.appUpdateInfo.addOnSuccessListener { appUpdateInfo ->
+                        isCheckingUpdate = false
+                        if (appUpdateInfo.updateAvailability() == UpdateAvailability.UPDATE_AVAILABLE
+                            && appUpdateInfo.isUpdateTypeAllowed(AppUpdateType.IMMEDIATE)
+                        ) {
+                            activity?.let {
+                                appUpdateManager.startUpdateFlowForResult(
+                                    appUpdateInfo,
+                                    updateLauncher,
+                                    AppUpdateOptions.defaultOptions(AppUpdateType.IMMEDIATE)
+                                )
+                            }
+                        } else {
+                            Toast.makeText(context, "You're on the latest version", Toast.LENGTH_SHORT).show()
+                        }
+                    }.addOnFailureListener {
+                        isCheckingUpdate = false
+                        Toast.makeText(context, "Could not check for updates", Toast.LENGTH_SHORT).show()
+                    }
+                }
+                .padding(8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = "Version $versionName",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+            Text(
+                text = if (isCheckingUpdate) "Checking..." else "Tap to check for updates",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary,
+                textAlign = TextAlign.Center
+            )
+        }
     }
 
     // Lossless confirmation dialog

@@ -104,6 +104,10 @@ dependencies {
     // Sentry Compose integration
     implementation(libs.sentry.compose.android)
 
+    // Play In-App Update
+    implementation(libs.play.app.update)
+    implementation(libs.play.app.update.ktx)
+
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
