@@ -5,7 +5,10 @@ import android.util.Log
 import androidx.core.net.toUri
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import nl.stoux.tfw.core.common.database.dao.EditionWithContent
 import nl.stoux.tfw.core.common.database.dao.LivesetWithDetails
@@ -14,17 +17,36 @@ import nl.stoux.tfw.core.common.database.entity.artworkUrl
 import javax.inject.Inject
 import javax.inject.Singleton
 
+fun interface LibraryChildrenChangedCallback {
+    fun onChildrenChanged(parentId: String, itemCount: Int)
+}
+
+enum class RefreshState { IDLE, REFRESHING, DONE }
+
 @Singleton
 class LibraryManager @Inject constructor(
     private val editionRepository: EditionRepository,
     private val sessionSettings: SessionSettings,
 ) {
 
-    private var lastRefreshTimeMs: Long = 0L
+    // Initialize to current time to prevent refreshIfStale() from triggering during startup race
+    // The actual refresh in init() will update this to the real completion time
+    @Volatile
+    private var lastRefreshTimeMs: Long = System.currentTimeMillis()
+    @Volatile
+    private var isRefreshing: Boolean = false
+    private var refreshState: RefreshState = RefreshState.IDLE
+    var childrenChangedCallback: LibraryChildrenChangedCallback? = null
 
     suspend fun init() {
-        editionRepository.refreshEditions()
-        lastRefreshTimeMs = System.currentTimeMillis()
+        if (isRefreshing) return
+        isRefreshing = true
+        try {
+            editionRepository.refreshEditions()
+            lastRefreshTimeMs = System.currentTimeMillis()
+        } finally {
+            isRefreshing = false
+        }
     }
 
     /**
@@ -78,6 +100,7 @@ class LibraryManager @Inject constructor(
             mediaId == CustomMediaId.ROOT_EDITIONS -> getEditions(page, pageSize)
             mediaId == CustomMediaId.ROOT_LIVESETS -> getAllLivesets(page, pageSize)
             mediaId == CustomMediaId.ROOT_SETTINGS -> getSettings(page, pageSize)
+            mediaId == CustomMediaId.SETTINGS_REFRESH -> getRefreshStatus()
 
             // Show items inside another item
             mediaId.isEdition() -> getEditionLivesets(mediaId, page, pageSize)
@@ -104,8 +127,50 @@ class LibraryManager @Inject constructor(
                 .setMediaMetadata(
                     MediaMetadata.Builder()
                         .setTitle("Refresh livesets")
+                        .setIsBrowsable(true)
+                        .setIsPlayable(false)
+                        .build()
+                )
+                .build()
+        )
+    }
+
+    private fun getRefreshStatus(): List<MediaItem> {
+        // Trigger refresh if idle
+        if (refreshState == RefreshState.IDLE) {
+            refreshState = RefreshState.REFRESHING
+            CoroutineScope(Dispatchers.IO).launch {
+                runCatching { editionRepository.refreshEditions() }
+                lastRefreshTimeMs = System.currentTimeMillis()
+                refreshState = RefreshState.DONE
+                // Notify that children changed so UI updates
+                childrenChangedCallback?.onChildrenChanged(
+                    CustomMediaId.SETTINGS_REFRESH.original,
+                    1
+                )
+            }
+        }
+
+        val (title, subtitle) = when (refreshState) {
+            RefreshState.IDLE -> "Tap to refresh" to null
+            RefreshState.REFRESHING -> "Refreshing..." to "Please wait"
+            RefreshState.DONE -> "Done!" to "Press back to continue"
+        }
+
+        // Reset to idle after showing "Done" so next time it can refresh again
+        if (refreshState == RefreshState.DONE) {
+            refreshState = RefreshState.IDLE
+        }
+
+        return listOf(
+            MediaItem.Builder()
+                .setMediaId("settings.refresh.status")
+                .setMediaMetadata(
+                    MediaMetadata.Builder()
+                        .setTitle(title)
+                        .setArtist(subtitle)
                         .setIsBrowsable(false)
-                        .setIsPlayable(true)
+                        .setIsPlayable(false)
                         .build()
                 )
                 .build()

@@ -339,18 +339,7 @@ class MediaPlaybackService : MediaLibraryService() {
                     }
 
                     val customId = CustomMediaId.from(mediaItems[0].mediaId)
-                    if (customId == CustomMediaId.SETTINGS_REFRESH) {
-                        // Trigger a refresh of livesets/editions but do not open the player UI; cancel the add request
-                        serviceIOScope.launch {
-                            runCatching { libraryManager.init() }
-                            serviceMainScope.launch {
-                                mediaLibrarySession?.notifyChildrenChanged(CustomMediaId.ROOT.original, libraryManager.getRootChildrenCount(), null)
-                            }
-                        }
-                        return Futures.immediateCancelledFuture()
-                    } else {
-                        resolveQueue(customId)
-                    }
+                    resolveQueue(customId)
                 }
                 else -> emptyList()
             }
