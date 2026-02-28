@@ -207,4 +207,13 @@ class DownloadTracker @Inject constructor(
     fun getDownloadState(downloadId: String): Download? {
         return _downloads.value[downloadId]
     }
+
+    /**
+     * Release resources. Call from MediaPlaybackService.onDestroy() to avoid listener leaks.
+     */
+    fun release() {
+        progressPollingJob?.cancel()
+        progressPollingJob = null
+        downloadManager.removeListener(this)
+    }
 }

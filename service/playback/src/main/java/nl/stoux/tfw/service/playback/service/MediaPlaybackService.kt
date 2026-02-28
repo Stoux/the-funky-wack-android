@@ -28,7 +28,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
+import nl.stoux.tfw.service.playback.download.DownloadTracker
 import nl.stoux.tfw.service.playback.player.PlayerManager
 import nl.stoux.tfw.service.playback.service.manager.LivesetTrackListener
 import nl.stoux.tfw.service.playback.service.manager.LivesetTrackManager
@@ -59,6 +59,8 @@ class MediaPlaybackService : MediaLibraryService() {
     @Inject lateinit var playbackStateRepository: PlaybackStateRepository
 
     @Inject lateinit var queueManager: QueueManager
+
+    @Inject lateinit var downloadTracker: DownloadTracker
 
     private var mediaLibrarySession: MediaLibrarySession? = null
 
@@ -186,17 +188,17 @@ class MediaPlaybackService : MediaLibraryService() {
         // Release singleton managers
         queueManager.release()
         trackManager.release()
+        downloadTracker.release()
 
-        // Detach coordinator before releasing player
+        // Detach coordinator before releasing player (fire-and-forget, best-effort save)
         serviceIOScope.launch {
-            runBlocking { resumeCoordinator.detach(playerManager.currentPlayer()) }
-            serviceMainScope.launch {
-                playerManager.release()
-
-                serviceIOScope.cancel()
-                serviceMainScope.cancel()
-            }
+            runCatching { resumeCoordinator.detach(playerManager.currentPlayer()) }
         }
+        // Release player on main thread
+        playerManager.release()
+
+        serviceIOScope.cancel()
+        serviceMainScope.cancel()
 
         super.onDestroy()
     }

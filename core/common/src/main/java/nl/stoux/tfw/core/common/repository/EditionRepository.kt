@@ -22,6 +22,7 @@ import nl.stoux.tfw.core.common.mappers.toEditionEntity
 import nl.stoux.tfw.core.common.mappers.toLivesetEntity
 import nl.stoux.tfw.core.common.mappers.toTrackEntity
 import nl.stoux.tfw.core.common.network.ApiService
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 
 /**
@@ -61,9 +62,8 @@ class EditionRepositoryImpl @Inject constructor(
     // Scope for keeping StateFlows hot (singleton lifetime)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    // Prevent concurrent/duplicate refresh calls
-    @Volatile
-    private var isRefreshing: Boolean = false
+    // Prevent concurrent/duplicate refresh calls using atomic compare-and-set
+    private val isRefreshing = AtomicBoolean(false)
     @Volatile
     private var lastRefreshTimeMs: Long = 0L
     private val minRefreshIntervalMs: Long = 5_000L // Don't refresh more than once per 5 seconds
@@ -107,12 +107,15 @@ class EditionRepositoryImpl @Inject constructor(
     override fun searchEditions(query: String, limit: Int): Flow<List<EditionWithContent>> = dao.searchEditions(query, limit)
 
     override suspend fun refreshEditions(): Unit = withContext(Dispatchers.IO) {
-        // Skip if already refreshing or refreshed recently
+        // Skip if refreshed recently
         val now = System.currentTimeMillis()
-        if (isRefreshing || (now - lastRefreshTimeMs) < minRefreshIntervalMs) {
+        if ((now - lastRefreshTimeMs) < minRefreshIntervalMs) {
             return@withContext
         }
-        isRefreshing = true
+        // Skip if already refreshing (atomic compare-and-set)
+        if (!isRefreshing.compareAndSet(false, true)) {
+            return@withContext
+        }
         try {
             val dtos = api.getEditions()
 
@@ -145,12 +148,13 @@ class EditionRepositoryImpl @Inject constructor(
             val livesetsToDelete = existingLivesetIds - apiLivesetIds
             val tracksToDelete = existingTrackIds - apiTrackIds
 
-            // Clean up downloads before deleting livesets
-            if (livesetsToDelete.isNotEmpty()) {
-                cleanupCallbackHolder.callback?.onLivesetsRemoving(livesetsToDelete)
-            }
-
             db.withTransaction {
+                // Clean up downloads before deleting livesets (inside transaction so we only
+                // clean up if the DB write succeeds, avoiding orphaned downloads)
+                if (livesetsToDelete.isNotEmpty()) {
+                    cleanupCallbackHolder.callback?.onLivesetsRemoving(livesetsToDelete)
+                }
+
                 // Delete removed items (order matters for FKs: tracks -> livesets -> editions)
                 if (tracksToDelete.isNotEmpty()) {
                     dao.deleteTracksByIds(tracksToDelete.toList())
@@ -173,7 +177,7 @@ class EditionRepositoryImpl @Inject constructor(
             Log.w("TfwDao", "Failed to refresh editions", e)
             // Intentionally swallow to keep UI working with stale data
         } finally {
-            isRefreshing = false
+            isRefreshing.set(false)
         }
     }
 }

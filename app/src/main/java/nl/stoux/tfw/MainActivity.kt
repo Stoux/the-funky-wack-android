@@ -57,7 +57,6 @@ import javax.inject.Inject
 import android.content.Intent
 import android.net.Uri
 import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -85,7 +84,8 @@ class MainActivity : FragmentActivity() {
     @Inject lateinit var editionRepository: EditionRepository
 
     // Signal from Activity lifecycle (e.g., notification tap) to Compose to open the player
-    private val showPlayerRequest = mutableStateOf(false)
+    // Using MutableSharedFlow for thread-safe event passing from Activity lifecycle to Compose
+    private val showPlayerRequest = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
 
     // App update launcher for Play In-App Updates
     private val updateLauncher = registerForActivityResult(
@@ -101,7 +101,7 @@ class MainActivity : FragmentActivity() {
 
         // If launched with action to show player, request it
         if (intent?.action == MediaPlaybackService.ACTION_SHOW_PLAYER) {
-            showPlayerRequest.value = true
+            showPlayerRequest.tryEmit(Unit)
         }
 
         enableEdgeToEdge()
@@ -124,10 +124,9 @@ class MainActivity : FragmentActivity() {
                 val scope = rememberCoroutineScope()
 
                 // React to external request to open player (e.g., notification tap)
-                LaunchedEffect(showPlayerRequest.value) {
-                    if (showPlayerRequest.value) {
-                        scope.launch { scaffoldState.bottomSheetState.expand() }
-                        showPlayerRequest.value = false
+                LaunchedEffect(Unit) {
+                    showPlayerRequest.collectLatest {
+                        scaffoldState.bottomSheetState.expand()
                     }
                 }
 
@@ -343,7 +342,7 @@ class MainActivity : FragmentActivity() {
         // First, try to handle as an incoming app link; don't finish when activity already running
         handleIncomingViewIntent(intent, finishIfBounced = false)
         if (intent.action == MediaPlaybackService.ACTION_SHOW_PLAYER) {
-            showPlayerRequest.value = true
+            showPlayerRequest.tryEmit(Unit)
         }
     }
 
@@ -380,7 +379,7 @@ private fun NowPlayingBar(
     val displayTitle = currentTrack?.title ?: livesetTitle ?: controllerTitle ?: "Playing"
     val subtitleParts = mutableListOf<String>()
     if (currentTrack != null && !livesetTitle.isNullOrBlank()) subtitleParts.add(livesetTitle)
-    if (!editionNo.isNullOrBlank()) subtitleParts.add("TFW #$editionNo")
+    if (editionNo != null) subtitleParts.add("TFW #$editionNo")
     val subtitle = subtitleParts.joinToString(" / ").ifBlank { null }
 
     Surface(

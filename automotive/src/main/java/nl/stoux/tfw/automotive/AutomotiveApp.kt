@@ -2,25 +2,7 @@ package nl.stoux.tfw.automotive
 
 import android.app.Application
 import dagger.hilt.android.HiltAndroidApp
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import nl.stoux.tfw.core.common.repository.EditionRepository
-import javax.inject.Inject
 
 @HiltAndroidApp
-class AutomotiveApp : Application() {
-
-    @Inject lateinit var editionRepository: EditionRepository
-
-
-    override fun onCreate() {
-        super.onCreate()
-
-        // Refresh the list of editions
-        CoroutineScope(Dispatchers.IO).launch {
-            editionRepository.refreshEditions()
-        }
-    }
-
-}
+class AutomotiveApp : Application()
+// Note: refreshEditions() is called by MediaPlaybackService.onCreate() via libraryManager.init()

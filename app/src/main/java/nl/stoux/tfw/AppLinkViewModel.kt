@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import nl.stoux.tfw.core.common.database.dao.LivesetWithDetails
 import nl.stoux.tfw.core.common.repository.EditionRepository
+import io.sentry.Sentry
 
 /**
  * Holds deep-link state and resolves liveset details for UI.
@@ -40,7 +41,9 @@ class AppLinkViewModel @Inject constructor(
         // Resolve liveset and expose if playable
         viewModelScope.launch {
             val lwd = withContext(Dispatchers.IO) {
-                runCatching { editionRepository.findLiveset(deepLink.livesetId).first() }.getOrNull()
+                runCatching { editionRepository.findLiveset(deepLink.livesetId).first() }
+                    .onFailure { e -> Sentry.captureException(e) }
+                    .getOrNull()
             }
             _resolved.value = if (lwd != null && hasPlayable(lwd)) {
                 ResolvedDeepLink(deepLink, lwd)

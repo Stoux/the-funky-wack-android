@@ -320,7 +320,15 @@ class PlayerManager @Inject constructor(
     }
 
     fun release() {
-        val player = _activePlayer.value as? ExoPlayer ?: return
+        // Release CastPlayer if active
+        castPlayer?.let { cp ->
+            runCatching { cp.release() }.onFailure {
+                Log.w(TAG, "Failed to release CastPlayer", it)
+            }
+            castPlayer = null
+        }
+
+        val player = _activePlayer.value ?: return
 
         runCatching {
             player.playWhenReady = false
@@ -328,7 +336,7 @@ class PlayerManager @Inject constructor(
             player.clearMediaItems()
         }
 
-        player.release()
+        (player as? ExoPlayer)?.release()
         _activePlayer.value = null
     }
 
