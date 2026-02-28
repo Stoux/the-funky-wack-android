@@ -25,12 +25,10 @@
         <!-- Sentry error reporting -->
         <meta-data android:name="io.sentry.dsn" android:value="${SENTRY_DSN}" />
         <meta-data android:name="io.sentry.environment" android:value="${SENTRY_ENVIRONMENT}" />
-        <meta-data android:name="io.sentry.debug" android:value="true" />
-        <meta-data android:name="io.sentry.traces.sample-rate" android:value="0.2" />
+        <meta-data android:name="io.sentry.debug" android:value="false" />
+        <meta-data android:name="io.sentry.traces.sample-rate" android:value="0.1" />
         <meta-data android:name="io.sentry.attach-screenshot" android:value="true" />
         <meta-data android:name="io.sentry.attach-stacktrace" android:value="true" />
-        <meta-data android:name="io.sentry.traces.user-interaction.enable" android:value="true" />
-        <meta-data android:name="io.sentry.breadcrumbs.user-interaction" android:value="true" />
 
         <!-- Android Auto support -->
         <meta-data
