@@ -11,9 +11,7 @@ import kotlinx.coroutines.launch
 import nl.stoux.tfw.core.common.auth.AuthRepository
 import nl.stoux.tfw.core.common.database.dao.EditionWithContent
 import nl.stoux.tfw.core.common.database.dao.LivesetWithDetails
-import kotlinx.coroutines.runBlocking
 import nl.stoux.tfw.core.common.network.dto.auth.PlaylistDto
-import nl.stoux.tfw.core.common.network.dto.auth.PlaylistItemDto
 import nl.stoux.tfw.core.common.repository.EditionRepository
 import nl.stoux.tfw.core.common.repository.FavoritesRepository
 import nl.stoux.tfw.core.common.repository.PlaybackPositionRepository
@@ -251,14 +249,20 @@ class LibraryManager @Inject constructor(
 
     private fun getPlaylistItems(mediaId: CustomMediaId, page: Int, pageSize: Int): List<MediaItem> {
         val shareCode = mediaId.getPlaylistShareCode() ?: return emptyList()
-        // Fetch the playlist detail synchronously — the Media3 callback is already on a background thread
-        val detail = runCatching { runBlocking { playlistRepository.getPlaylist(shareCode) } }.getOrNull() ?: return emptyList()
-        val items = detail.items.orEmpty()
-        return paginate(items, page, pageSize).mapNotNull { item ->
-            val livesetId = item.livesetId
-            val liveset = editionRepository.getCachedLiveset(livesetId) ?: return@mapNotNull null
-            livesetMediaItem(liveset, showEditionInfo = true)
+        val cachedIds = playlistRepository.cachedItemLivesetIds(shareCode)
+
+        // Fire an async refresh so subsequent navigations get the latest order
+        // and items; notify the library when fresh items land.
+        CoroutineScope(Dispatchers.IO).launch {
+            runCatching { playlistRepository.getPlaylist(shareCode) }
+            childrenChangedCallback?.onChildrenChanged(
+                mediaId.original,
+                playlistRepository.cachedItemLivesetIds(shareCode).size,
+            )
         }
+
+        val livesets = cachedIds.mapNotNull { editionRepository.getCachedLiveset(it) }
+        return paginate(livesets, page, pageSize).map { livesetMediaItem(it, showEditionInfo = true) }
     }
 
     private fun playlistMediaItem(playlist: PlaylistDto): MediaItem {

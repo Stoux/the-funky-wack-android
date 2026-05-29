@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.first
 import nl.stoux.tfw.core.common.database.dao.PlaylistDao
 import nl.stoux.tfw.core.common.database.entity.PlaylistEntity
 import nl.stoux.tfw.core.common.database.entity.PlaylistItemEntity
@@ -39,6 +40,22 @@ class PlaylistRepository @Inject constructor(
     val playlists: StateFlow<List<PlaylistDto>> = playlistDao.observeAll()
         .map { rows -> rows.map { it.toDto() } }
         .stateIn(scope, SharingStarted.Eagerly, emptyList())
+
+    /**
+     * Liveset IDs currently cached for the given playlist share code, ordered
+     * by position. Reads from the DAO synchronously so the Media3 library
+     * callback doesn't have to block on a network call.
+     */
+    fun cachedItemLivesetIds(shareCode: String): List<Long> {
+        val playlist = playlists.value.firstOrNull { it.shareCode == shareCode } ?: return emptyList()
+        return scope.let {
+            // Block briefly on a Room read (~microseconds) — this avoids
+            // pulling Flow plumbing into LibraryManager just to read sync.
+            kotlinx.coroutines.runBlocking {
+                playlistDao.observeItems(playlist.id).first().sortedBy { it.position }.map { it.livesetId }
+            }
+        }
+    }
 
     suspend fun refresh() {
         try {
