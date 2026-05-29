@@ -19,10 +19,10 @@ fun loadSecrets(isProd: Boolean): Properties = Properties().apply {
     }
 }
 
-fun reverbAppKey(isProd: Boolean): String =
-    loadSecrets(isProd).getProperty("REVERB_APP_KEY")
-        ?: System.getenv("REVERB_APP_KEY")
-        ?: ""
+fun reverbValue(isProd: Boolean, key: String, fallback: String): String =
+    loadSecrets(isProd).getProperty(key)
+        ?: System.getenv(key)
+        ?: fallback
 
 android {
     namespace = "nl.stoux.tfw.core.common"
@@ -41,10 +41,16 @@ android {
 
     buildTypes {
         debug {
-            buildConfigField("String", "REVERB_APP_KEY", "\"${reverbAppKey(isProd = false)}\"")
+            buildConfigField("String", "REVERB_APP_KEY", "\"${reverbValue(false, "REVERB_APP_KEY", "")}\"")
+            buildConfigField("String", "REVERB_HOST", "\"${reverbValue(false, "REVERB_HOST", "")}\"")
+            buildConfigField("int", "REVERB_PORT", reverbValue(false, "REVERB_PORT", "443"))
+            buildConfigField("String", "REVERB_SCHEME", "\"${reverbValue(false, "REVERB_SCHEME", "https")}\"")
         }
         release {
-            buildConfigField("String", "REVERB_APP_KEY", "\"${reverbAppKey(isProd = true)}\"")
+            buildConfigField("String", "REVERB_APP_KEY", "\"${reverbValue(true, "REVERB_APP_KEY", "")}\"")
+            buildConfigField("String", "REVERB_HOST", "\"${reverbValue(true, "REVERB_HOST", "")}\"")
+            buildConfigField("int", "REVERB_PORT", reverbValue(true, "REVERB_PORT", "443"))
+            buildConfigField("String", "REVERB_SCHEME", "\"${reverbValue(true, "REVERB_SCHEME", "https")}\"")
 
             isMinifyEnabled = false
             proguardFiles(

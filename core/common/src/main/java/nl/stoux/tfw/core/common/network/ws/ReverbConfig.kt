@@ -3,19 +3,23 @@ package nl.stoux.tfw.core.common.network.ws
 import nl.stoux.tfw.core.common.BuildConfig
 
 /**
- * Connection settings for the Laravel Reverb server backing tfw.stoux.nl.
+ * Connection settings for the Laravel Reverb server. Values come from
+ * `secrets.properties` (debug) or `secrets.prod.properties` (release)
+ * via `core/common/build.gradle.kts` buildConfigField wiring.
  *
- * Reverb speaks the Pusher protocol, so the official pusher-java-client connects
- * with the same options structure. APP_KEY is public — auth happens server-side
- * via /api/broadcast/auth with the user's Sanctum token — but we still load it
- * from `secrets.properties` (or `secrets.prod.properties`) so it stays out of
- * git and prod/debug can differ.
+ * Reverb speaks the Pusher protocol, so pusher-java-client connects with
+ * the same options structure. APP_KEY is public — real auth happens
+ * server-side through /api/broadcast/auth with the Sanctum bearer.
  */
 object ReverbConfig {
     val APP_KEY: String = BuildConfig.REVERB_APP_KEY
-    const val HOST = "tfw.stoux.nl"
-    const val PORT = 443
-    const val USE_TLS = true
+    val HOST: String = BuildConfig.REVERB_HOST
+    val PORT: Int = BuildConfig.REVERB_PORT
+    val USE_TLS: Boolean = BuildConfig.REVERB_SCHEME.equals("https", ignoreCase = true)
     const val ACTIVITY_TIMEOUT_MS = 120_000L
-    const val AUTH_URL = "https://tfw.stoux.nl/api/broadcast/auth"
+    val AUTH_URL: String = "https://tfw.stoux.nl/api/broadcast/auth"
+
+    /** True when all required values are present — listen-along no-ops otherwise. */
+    val isConfigured: Boolean
+        get() = APP_KEY.isNotBlank() && HOST.isNotBlank()
 }

@@ -53,6 +53,10 @@ class ReverbClient @Inject constructor(
     @Synchronized
     fun connect() {
         if (pusher != null) return
+        if (!ReverbConfig.isConfigured) {
+            Log.w("ReverbClient", "Reverb not configured (missing REVERB_APP_KEY or REVERB_HOST in secrets). Skipping connect.")
+            return
+        }
         val options = PusherOptions().apply {
             setHost(ReverbConfig.HOST)
             setWssPort(ReverbConfig.PORT)
