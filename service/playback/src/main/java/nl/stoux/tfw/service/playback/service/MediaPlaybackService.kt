@@ -391,9 +391,12 @@ class MediaPlaybackService : MediaLibraryService() {
 
                     val first = mediaItems[0]
                     val customId = CustomMediaId.from(first.mediaId)
-                    val playlistShareCode = first.mediaMetadata.extras
+                    val extras = first.mediaMetadata.extras
+                    val playlistShareCode = extras
                         ?.getString(nl.stoux.tfw.service.playback.service.session.EXTRA_PLAYLIST_SHARE_CODE)
-                    resolveQueue(customId, playlistShareCode)
+                    val fromFavorites = extras
+                        ?.getBoolean(nl.stoux.tfw.service.playback.service.session.EXTRA_FROM_FAVORITES) == true
+                    resolveQueue(customId, playlistShareCode, fromFavorites)
                 }
                 else -> emptyList()
             }
@@ -401,16 +404,23 @@ class MediaPlaybackService : MediaLibraryService() {
             return Futures.immediateFuture(items)
         }
 
-        private fun resolveQueue(mediaId: CustomMediaId, playlistShareCode: String? = null): List<MediaItem> {
+        private fun resolveQueue(
+            mediaId: CustomMediaId,
+            playlistShareCode: String? = null,
+            fromFavorites: Boolean = false,
+        ): List<MediaItem> {
             // We only support playing
             val livesetId = mediaId.getLivesetId()
             if (livesetId == null) return emptyList()
 
             // Tap from inside a playlist shelf → queue is the playlist itself,
-            // rotated so the tapped liveset is first. Otherwise fall back to
-            // edition-context (the existing default).
+            // rotated so the tapped liveset is first. Favorites shelf works the
+            // same way. Otherwise fall back to edition-context (the default).
             if (playlistShareCode != null) {
                 return libraryManager.getQueueBasedForPlaylist(playlistShareCode, livesetId)
+            }
+            if (fromFavorites) {
+                return libraryManager.getQueueBasedForFavorites(livesetId)
             }
             return libraryManager.getQueueBasedForLiveset(livesetId)
         }

@@ -30,6 +30,9 @@ enum class RefreshState { IDLE, REFRESHING, DONE }
 /** MediaMetadata extra carrying the source playlist share code for media-library items. */
 const val EXTRA_PLAYLIST_SHARE_CODE = "tfw.source_playlist_share_code"
 
+/** MediaMetadata extra marking that the item came from the favorites shelf. */
+const val EXTRA_FROM_FAVORITES = "tfw.source_favorites"
+
 @Singleton
 class LibraryManager @Inject constructor(
     private val editionRepository: EditionRepository,
@@ -232,7 +235,36 @@ class LibraryManager @Inject constructor(
     private fun getFavoriteLivesets(page: Int, pageSize: Int): List<MediaItem> {
         val favoriteIds = favoritesRepository.favoriteLivesetIds.value
         val livesets = favoriteIds.mapNotNull { editionRepository.getCachedLiveset(it) }
-        return paginate(livesets, page, pageSize).map { liveset -> livesetMediaItem(liveset, true) }
+        return paginate(livesets, page, pageSize).map { liveset ->
+            // Tag each item so onAddMediaItems can build a favorites-ordered queue
+            // when the user taps from Android Auto.
+            val base = livesetMediaItem(liveset, showEditionInfo = true)
+            val extras = (base.mediaMetadata.extras ?: Bundle()).apply {
+                putBoolean(EXTRA_FROM_FAVORITES, true)
+            }
+            val metadata = base.mediaMetadata.buildUpon().setExtras(extras).build()
+            base.buildUpon().setMediaMetadata(metadata).build()
+        }
+    }
+
+    /**
+     * Queue ordering when the user starts playback from the favorites shelf:
+     * the favorites list itself, rotated so the tapped liveset comes first.
+     * Falls back to edition-context if the favorite isn't cached yet.
+     */
+    fun getQueueBasedForFavorites(startLivesetId: Long): List<MediaItem> {
+        val favoriteIds = favoritesRepository.favoriteLivesetIds.value
+        if (favoriteIds.isEmpty()) return getQueueBasedForLiveset(startLivesetId)
+        val livesets = favoriteIds.mapNotNull { editionRepository.getCachedLiveset(it) }
+            .filter { (it.liveset.hqUrl ?: it.liveset.lqUrl ?: it.liveset.losslessUrl) != null }
+        val startIdx = livesets.indexOfFirst { it.liveset.id == startLivesetId }
+        if (startIdx == -1) return getQueueBasedForLiveset(startLivesetId)
+
+        val reordered = mutableListOf<LivesetWithDetails>()
+        reordered.add(livesets[startIdx])
+        reordered.addAll(livesets.subList(startIdx + 1, livesets.size))
+        reordered.addAll(livesets.subList(0, startIdx))
+        return reordered.map { livesetMediaItem(it) }
     }
 
     private fun getPlaylists(page: Int, pageSize: Int): List<MediaItem> {
