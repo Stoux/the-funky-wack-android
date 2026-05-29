@@ -1,61 +1,72 @@
 package nl.stoux.tfw.core.common.repository
 
 import android.util.Log
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import nl.stoux.tfw.core.common.auth.AuthRepository
+import nl.stoux.tfw.core.common.database.dao.FavoriteDao
 import nl.stoux.tfw.core.common.database.dao.LivesetWithDetails
+import nl.stoux.tfw.core.common.database.entity.FavoriteEntity
 import nl.stoux.tfw.core.common.network.ApiService
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Manages favorites with optimistic toggle and server sync.
+ * Favorites with optimistic toggle and stale-while-revalidate caching.
+ *
+ * - DAO is the source of truth for what the UI displays.
+ * - refresh() pulls the server list and replaces the cache.
+ * - toggle() writes locally first, then hits the API and reverts on failure.
+ *
+ * Offline: previously-cached favorites still appear.
  */
 @Singleton
 class FavoritesRepository @Inject constructor(
     private val api: ApiService,
     private val authRepository: AuthRepository,
     private val editionRepository: EditionRepository,
+    private val favoriteDao: FavoriteDao,
 ) {
-    private val _favorites = MutableStateFlow<List<Long>>(emptyList())
-    val favoriteLivesetIds: StateFlow<List<Long>> = _favorites.asStateFlow()
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    private val _favoritesList = MutableStateFlow<List<LivesetWithDetails>>(emptyList())
-    val favoritesList: StateFlow<List<LivesetWithDetails>> = _favoritesList.asStateFlow()
+    val favoriteLivesetIds: StateFlow<List<Long>> = favoriteDao.observeIds()
+        .stateIn(scope, SharingStarted.Eagerly, emptyList())
 
-    /**
-     * Refresh favorites from server.
-     */
+    val favoritesList: StateFlow<List<LivesetWithDetails>> = favoriteDao.observeIds()
+        .map { ids -> ids.mapNotNull { editionRepository.getCachedLiveset(it) } }
+        .stateIn(scope, SharingStarted.Eagerly, emptyList())
+
+    /** Refresh favorites from server and replace the local cache. */
     suspend fun refresh() {
         if (!authRepository.isLoggedIn.value) return
         try {
             val response = api.getFavorites()
-            val ids = response.favorites.map { it.id }
-            _favorites.value = ids
-            // Resolve to LivesetWithDetails from cache
-            _favoritesList.value = ids.mapNotNull { editionRepository.getCachedLiveset(it) }
+            val entities = response.favorites.map { fav ->
+                FavoriteEntity(livesetId = fav.id, favoritedAt = fav.favoritedAt)
+            }
+            favoriteDao.replaceAll(entities)
         } catch (e: Exception) {
             Log.w("FavoritesRepository", "Failed to refresh favorites", e)
         }
     }
 
-    /**
-     * Check if a liveset is favorited (from local cache).
-     */
-    fun isFavorited(livesetId: Long): Boolean = livesetId in _favorites.value
+    fun isFavorited(livesetId: Long): Boolean = livesetId in favoriteLivesetIds.value
 
-    /**
-     * Toggle favorite status. Optimistic update, reverts on error.
-     */
+    /** Toggle favorite status. Optimistic update via DAO, reverts on error. */
     suspend fun toggleFavorite(livesetId: Long): Boolean {
         val wasFavorited = isFavorited(livesetId)
-        // Optimistic update
         if (wasFavorited) {
-            _favorites.value = _favorites.value - livesetId
+            favoriteDao.delete(livesetId)
         } else {
-            _favorites.value = _favorites.value + livesetId
+            favoriteDao.upsert(FavoriteEntity(livesetId = livesetId))
         }
 
         try {
@@ -64,18 +75,14 @@ class FavoritesRepository @Inject constructor(
             } else {
                 api.addFavorite(livesetId)
             }
-            // Update list
-            _favoritesList.value = _favorites.value.mapNotNull { editionRepository.getCachedLiveset(it) }
             return !wasFavorited
         } catch (e: Exception) {
-            Log.w("FavoritesRepository", "Failed to toggle favorite", e)
-            // Revert optimistic update
+            Log.w("FavoritesRepository", "Failed to toggle favorite, reverting", e)
             if (wasFavorited) {
-                _favorites.value = _favorites.value + livesetId
+                favoriteDao.upsert(FavoriteEntity(livesetId = livesetId))
             } else {
-                _favorites.value = _favorites.value - livesetId
+                favoriteDao.delete(livesetId)
             }
-            _favoritesList.value = _favorites.value.mapNotNull { editionRepository.getCachedLiveset(it) }
             throw e
         }
     }

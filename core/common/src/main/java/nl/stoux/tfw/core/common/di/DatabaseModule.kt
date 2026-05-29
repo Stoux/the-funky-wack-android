@@ -10,8 +10,11 @@ import dagger.hilt.components.SingletonComponent
 import nl.stoux.tfw.core.common.database.AppDatabase
 import nl.stoux.tfw.core.common.database.Migrations
 import nl.stoux.tfw.core.common.database.dao.EditionDao
+import nl.stoux.tfw.core.common.database.dao.FavoriteDao
 import nl.stoux.tfw.core.common.database.dao.LivesetDownloadDao
 import nl.stoux.tfw.core.common.database.dao.ManualQueueDao
+import nl.stoux.tfw.core.common.database.dao.PlaybackPositionDao
+import nl.stoux.tfw.core.common.database.dao.PlaylistDao
 import javax.inject.Singleton
 
 @Module
@@ -35,4 +38,13 @@ object DatabaseModule {
 
     @Provides
     fun provideLivesetDownloadDao(db: AppDatabase): LivesetDownloadDao = db.livesetDownloadDao()
+
+    @Provides
+    fun provideFavoriteDao(db: AppDatabase): FavoriteDao = db.favoriteDao()
+
+    @Provides
+    fun providePlaylistDao(db: AppDatabase): PlaylistDao = db.playlistDao()
+
+    @Provides
+    fun providePlaybackPositionDao(db: AppDatabase): PlaybackPositionDao = db.playbackPositionDao()
 }

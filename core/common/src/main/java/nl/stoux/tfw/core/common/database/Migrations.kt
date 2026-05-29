@@ -82,5 +82,45 @@ object Migrations {
         }
     }
 
-    val ALL_MIGRATIONS = arrayOf(MIGRATION_4_5, MIGRATION_5_6)
+    /**
+     * Migration from version 6 to 7:
+     * - Add Room-backed caches for favorites, playlists (with items), and playback positions
+     */
+    val MIGRATION_6_7 = object : Migration(6, 7) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                "CREATE TABLE IF NOT EXISTS favorites (" +
+                    "livesetId INTEGER PRIMARY KEY NOT NULL, " +
+                    "favoritedAt TEXT)"
+            )
+            db.execSQL(
+                "CREATE TABLE IF NOT EXISTS playlists (" +
+                    "id INTEGER PRIMARY KEY NOT NULL, " +
+                    "name TEXT NOT NULL, " +
+                    "description TEXT, " +
+                    "visibility TEXT NOT NULL, " +
+                    "shareCode TEXT NOT NULL, " +
+                    "itemsCount INTEGER NOT NULL, " +
+                    "isOwn INTEGER NOT NULL, " +
+                    "ownerName TEXT)"
+            )
+            db.execSQL(
+                "CREATE TABLE IF NOT EXISTS playlist_items (" +
+                    "playlistId INTEGER NOT NULL, " +
+                    "livesetId INTEGER NOT NULL, " +
+                    "position INTEGER NOT NULL, " +
+                    "PRIMARY KEY (playlistId, livesetId))"
+            )
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_playlist_items_playlistId ON playlist_items (playlistId)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_playlist_items_livesetId ON playlist_items (livesetId)")
+            db.execSQL(
+                "CREATE TABLE IF NOT EXISTS playback_positions (" +
+                    "livesetId INTEGER PRIMARY KEY NOT NULL, " +
+                    "positionSeconds INTEGER NOT NULL, " +
+                    "updatedAt TEXT)"
+            )
+        }
+    }
+
+    val ALL_MIGRATIONS = arrayOf(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
 }
