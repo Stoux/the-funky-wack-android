@@ -108,6 +108,9 @@ dependencies {
     // Sentry Compose integration
     implementation(libs.sentry.compose.android)
 
+    // Coil for artwork in the Continue listening row
+    implementation(libs.coil.compose)
+
     // Play In-App Update
     implementation(libs.play.app.update)
     implementation(libs.play.app.update.ktx)

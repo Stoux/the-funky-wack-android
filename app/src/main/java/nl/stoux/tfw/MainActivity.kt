@@ -46,6 +46,7 @@ import androidx.compose.ui.graphics.Color
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 import nl.stoux.tfw.auth.LoginScreen
+import nl.stoux.tfw.continuelisten.ContinueListeningSection
 import nl.stoux.tfw.devices.DevicesScreen
 import nl.stoux.tfw.favorites.FavoritesScreen
 import nl.stoux.tfw.invites.InvitesScreen
@@ -262,12 +263,23 @@ class MainActivity : FragmentActivity() {
                                     )
                                 } else {
                                     when (currentScreen) {
-                                        AppScreen.Browse -> EditionListScreen(
-                                            viewModel = listViewModel,
-                                            onPlayClicked = { mediaId -> playerViewModel.playLiveset(mediaId) },
-                                            onOpenPlayer = { scope.launch { scaffoldState.bottomSheetState.expand() } },
-                                            onAddToQueue = { id -> queueManager.enqueueNext(id) }
-                                        )
+                                        AppScreen.Browse -> androidx.compose.foundation.layout.Column(
+                                            modifier = Modifier.fillMaxSize()
+                                        ) {
+                                            ContinueListeningSection(
+                                                onResume = { livesetId, positionSec ->
+                                                    playerViewModel.playLiveset(
+                                                        CustomMediaId.from("liveset:$livesetId@$positionSec")
+                                                    )
+                                                },
+                                            )
+                                            EditionListScreen(
+                                                viewModel = listViewModel,
+                                                onPlayClicked = { mediaId -> playerViewModel.playLiveset(mediaId) },
+                                                onOpenPlayer = { scope.launch { scaffoldState.bottomSheetState.expand() } },
+                                                onAddToQueue = { id -> queueManager.enqueueNext(id) }
+                                            )
+                                        }
                                         AppScreen.Favorites -> FavoritesScreen(
                                             onPlayClicked = { mediaId -> playerViewModel.playLiveset(CustomMediaId.from(mediaId)) },
                                         )
