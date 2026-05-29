@@ -54,7 +54,11 @@ fun PlaylistsScreen(
         PlaylistDetailContent(
             playlist = selectedPlaylist,
             onBack = { viewModel.clearSelection() },
-            onPlayClicked = onPlayClicked,
+            onPlayItem = { livesetId ->
+                viewModel.playFromPlaylist(selectedPlaylist.shareCode, livesetId)
+                // Still notify the host so it can do things like open the player sheet
+                onPlayClicked("liveset:$livesetId")
+            },
         )
         return
     }
@@ -136,7 +140,7 @@ private fun PlaylistRow(
 private fun PlaylistDetailContent(
     playlist: PlaylistDto,
     onBack: () -> Unit,
-    onPlayClicked: (String) -> Unit,
+    onPlayItem: (Long) -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -170,7 +174,7 @@ private fun PlaylistDetailContent(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { onPlayClicked("liveset:${item.livesetId}") }
+                            .clickable { onPlayItem(item.livesetId) }
                             .padding(12.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {

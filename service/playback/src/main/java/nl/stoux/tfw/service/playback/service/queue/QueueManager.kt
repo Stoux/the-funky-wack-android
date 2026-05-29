@@ -19,6 +19,7 @@ import kotlinx.coroutines.withContext
 import nl.stoux.tfw.core.common.database.dao.ManualQueueDao
 import nl.stoux.tfw.core.common.database.entity.ManualQueueItemEntity
 import nl.stoux.tfw.core.common.repository.EditionRepository
+import nl.stoux.tfw.core.common.repository.PlaylistRepository
 import nl.stoux.tfw.service.playback.download.DownloadRepository
 import nl.stoux.tfw.service.playback.player.CastToLocalCallback
 import nl.stoux.tfw.service.playback.player.LocalToCastCallback
@@ -41,6 +42,7 @@ class QueueManager @Inject constructor(
     private val editionRepository: EditionRepository,
     private val playbackSettings: PlaybackSettingsRepository,
     private val downloadRepository: DownloadRepository,
+    private val playlistRepository: PlaylistRepository,
 ) : Player.Listener {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
@@ -287,6 +289,38 @@ class QueueManager @Inject constructor(
      * @param startPositionMs Optional start position for that liveset.
      * @param autoplay Whether to start playback immediately after applying.
      */
+    /**
+     * Build and set the context queue from a playlist. Items beyond the
+     * starting liveset come from the playlist's own ordering rather than the
+     * starting liveset's edition.
+     */
+    fun setContextFromPlaylist(
+        shareCode: String,
+        startLivesetId: Long,
+        startPositionMs: Long? = null,
+        autoplay: Boolean = true,
+    ) {
+        if (autoplay) userInitiatedPlayback = true
+        scope.launch {
+            var defaultQuality = playbackSettings.audioQuality().first()
+            if (defaultQuality == AudioQuality.LOSSLESS && !playbackSettings.allowLossless().first()) {
+                defaultQuality = AudioQuality.HIGH
+            }
+            _currentQuality.value = defaultQuality
+
+            val livesetIds = playlistRepository.cachedItemLivesetIds(shareCode).ifEmpty { listOf(startLivesetId) }
+            val resolved = withContext(Dispatchers.IO) {
+                livesetIds.mapNotNull { id -> resolveQueueItem(id, manualEntryId = null) }
+            }
+            mutex.withLock {
+                context.clear()
+                context.addAll(resolved)
+                rebuildEffectiveLocked(startLivesetId)
+            }
+            applyToPlayerSafely(startLivesetId = startLivesetId, startPositionMs = startPositionMs, autoplay = autoplay)
+        }
+    }
+
     fun setContextFromLiveset(livesetId: Long, startPositionMs: Long? = null, autoplay: Boolean = true) {
         // Mark that user initiated playback (prevents restore from overwriting)
         if (autoplay) {

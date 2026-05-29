@@ -10,6 +10,7 @@ import kotlinx.coroutines.launch
 import nl.stoux.tfw.core.common.auth.AuthRepository
 import nl.stoux.tfw.core.common.network.dto.auth.PlaylistDto
 import nl.stoux.tfw.core.common.repository.PlaylistRepository
+import nl.stoux.tfw.service.playback.service.queue.QueueManager
 import javax.inject.Inject
 
 data class PlaylistsUiState(
@@ -21,6 +22,7 @@ data class PlaylistsUiState(
 @HiltViewModel
 class PlaylistsViewModel @Inject constructor(
     private val playlistRepository: PlaylistRepository,
+    private val queueManager: QueueManager,
     authRepository: AuthRepository,
 ) : ViewModel() {
 
@@ -66,5 +68,18 @@ class PlaylistsViewModel @Inject constructor(
 
     fun clearSelection() {
         _uiState.value = _uiState.value.copy(selectedPlaylist = null)
+    }
+
+    /**
+     * Play a liveset from within a playlist context — the playlist's items
+     * (in order) become the queue, starting at this liveset.
+     */
+    fun playFromPlaylist(shareCode: String, livesetId: Long) {
+        queueManager.setContextFromPlaylist(
+            shareCode = shareCode,
+            startLivesetId = livesetId,
+            startPositionMs = 0L,
+            autoplay = true,
+        )
     }
 }
