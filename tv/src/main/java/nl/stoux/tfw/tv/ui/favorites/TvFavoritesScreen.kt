@@ -26,15 +26,25 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import nl.stoux.tfw.core.common.database.dao.LivesetWithDetails
 import nl.stoux.tfw.core.common.repository.FavoritesRepository
+import nl.stoux.tfw.service.playback.service.queue.QueueManager
 import javax.inject.Inject
 
 @HiltViewModel
 class TvFavoritesViewModel @Inject constructor(
     private val favoritesRepository: FavoritesRepository,
+    private val queueManager: QueueManager,
 ) : ViewModel() {
     val favorites: StateFlow<List<LivesetWithDetails>> = favoritesRepository.favoritesList
     init {
         viewModelScope.launch { favoritesRepository.refresh() }
+    }
+
+    fun playLiveset(livesetId: Long) {
+        queueManager.setContextFromLiveset(
+            livesetId = livesetId,
+            startPositionMs = 0L,
+            autoplay = true,
+        )
     }
 }
 
@@ -64,7 +74,10 @@ fun TvFavoritesScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 items(favorites, key = { it.liveset.id }) { lwd ->
-                    Button(onClick = { onLivesetClick(lwd.liveset.id) }) {
+                    Button(onClick = {
+                        viewModel.playLiveset(lwd.liveset.id)
+                        onLivesetClick(lwd.liveset.id)
+                    }) {
                         Text("${lwd.liveset.title} - ${lwd.liveset.artistName}")
                     }
                 }

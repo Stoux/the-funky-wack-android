@@ -295,9 +295,15 @@ class PlayerViewModel @Inject constructor(
 
     fun playLiveset(mediaId: CustomMediaId) {
         mediaId.getLivesetId()?.let { livesetId ->
-            // Centralized: let QueueManager build and apply the full context
+            // Honour the @timestamp suffix if present (used by Continue Listening
+            // taps to resume at a saved position).
+            val startPositionMs = mediaId.timestamp?.toLong()?.times(1000) ?: 0L
             viewModelScope.launch {
-                queueManager.setContextFromLiveset(livesetId = livesetId, startPositionMs = 0L, autoplay = true)
+                queueManager.setContextFromLiveset(
+                    livesetId = livesetId,
+                    startPositionMs = startPositionMs,
+                    autoplay = true,
+                )
             }
         }
     }
