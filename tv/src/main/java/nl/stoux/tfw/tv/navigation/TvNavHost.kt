@@ -12,6 +12,7 @@ import nl.stoux.tfw.tv.ui.browse.TvEditionDetailScreen
 import nl.stoux.tfw.tv.ui.favorites.TvFavoritesScreen
 import nl.stoux.tfw.tv.ui.live.TvLiveScreen
 import nl.stoux.tfw.tv.ui.player.TvNowPlayingScreen
+import nl.stoux.tfw.tv.ui.playlists.TvPlaylistDetailScreen
 import nl.stoux.tfw.tv.ui.playlists.TvPlaylistsScreen
 import nl.stoux.tfw.tv.ui.settings.TvSettingsScreen
 
@@ -114,14 +115,10 @@ fun TvNavHost() {
             )
         }
 
-        composable<TvDestination.PlaylistDetail> { backStackEntry ->
-            val route: TvDestination.PlaylistDetail = backStackEntry.toRoute()
-            // Simple playlist detail - reuses PlaylistsViewModel for now
-            TvPlaylistsScreen(
-                onPlaylistClick = { /* Already in detail */ },
-                onBack = {
-                    navController.popBackStack()
-                }
+        composable<TvDestination.PlaylistDetail> {
+            TvPlaylistDetailScreen(
+                onPlay = { navController.navigate(TvDestination.NowPlaying) },
+                onBack = { navController.popBackStack() },
             )
         }
 
