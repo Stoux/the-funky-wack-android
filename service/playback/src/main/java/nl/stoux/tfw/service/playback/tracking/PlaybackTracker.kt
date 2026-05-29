@@ -10,6 +10,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import nl.stoux.tfw.core.common.auth.AuthRepository
+import nl.stoux.tfw.core.common.device.DeviceIdManager
 import nl.stoux.tfw.core.common.network.ApiService
 import nl.stoux.tfw.core.common.network.dto.auth.PlaybackEventRequest
 import nl.stoux.tfw.core.common.network.dto.auth.PlaybackStartRequest
@@ -29,6 +30,7 @@ import javax.inject.Singleton
 class PlaybackTracker @Inject constructor(
     private val api: ApiService,
     private val authRepository: AuthRepository,
+    private val deviceIdManager: DeviceIdManager,
 ) {
     private val scope = CoroutineScope(Dispatchers.IO)
     private var listener: Player.Listener? = null
@@ -119,6 +121,8 @@ class PlaybackTracker @Inject constructor(
                         livesetId = livesetId,
                         event = "start",
                         position = lastPlayingPositionSec,
+                        platform = "android",
+                        clientId = deviceIdManager.clientId,
                     )
                 )
                 currentSessionId = response.playHistoryId

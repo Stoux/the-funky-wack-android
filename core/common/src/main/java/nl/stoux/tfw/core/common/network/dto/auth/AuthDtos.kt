@@ -56,6 +56,8 @@ data class PlaybackStartRequest(
     val event: String = "start",
     val quality: String? = null,
     val position: Long? = null,
+    val platform: String? = null,
+    @SerialName("client_id") val clientId: String? = null,
 )
 
 @Serializable
