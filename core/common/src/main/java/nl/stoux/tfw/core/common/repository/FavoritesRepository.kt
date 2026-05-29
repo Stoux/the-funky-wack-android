@@ -1,16 +1,14 @@
 package nl.stoux.tfw.core.common.repository
 
 import android.util.Log
+import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.launch
 import nl.stoux.tfw.core.common.auth.AuthRepository
 import nl.stoux.tfw.core.common.database.dao.FavoriteDao
 import nl.stoux.tfw.core.common.database.dao.LivesetWithDetails
@@ -37,6 +35,13 @@ class FavoritesRepository @Inject constructor(
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
+    /**
+     * Liveset IDs with a toggle currently in flight. A second tap on the same
+     * favourite while the first is still pending is silently dropped, so the
+     * UI heart can't flicker between two competing optimistic writes.
+     */
+    private val inFlight = ConcurrentHashMap.newKeySet<Long>()
+
     val favoriteLivesetIds: StateFlow<List<Long>> = favoriteDao.observeIds()
         .stateIn(scope, SharingStarted.Eagerly, emptyList())
 
@@ -61,29 +66,39 @@ class FavoritesRepository @Inject constructor(
     fun isFavorited(livesetId: Long): Boolean = livesetId in favoriteLivesetIds.value
 
     /** Toggle favorite status. Optimistic update via DAO, reverts on error. */
-    suspend fun toggleFavorite(livesetId: Long): Boolean {
-        val wasFavorited = isFavorited(livesetId)
-        if (wasFavorited) {
-            favoriteDao.delete(livesetId)
-        } else {
-            favoriteDao.upsert(FavoriteEntity(livesetId = livesetId))
+    suspend fun toggleFavorite(livesetId: Long): Boolean? {
+        // Drop overlapping taps for the same liveset — see [inFlight] for why.
+        if (!inFlight.add(livesetId)) {
+            Log.d("FavoritesRepository", "Toggle for $livesetId already in flight; ignoring")
+            return null
         }
 
         try {
+            val wasFavorited = isFavorited(livesetId)
             if (wasFavorited) {
-                api.removeFavorite(livesetId)
-            } else {
-                api.addFavorite(livesetId)
-            }
-            return !wasFavorited
-        } catch (e: Exception) {
-            Log.w("FavoritesRepository", "Failed to toggle favorite, reverting", e)
-            if (wasFavorited) {
-                favoriteDao.upsert(FavoriteEntity(livesetId = livesetId))
-            } else {
                 favoriteDao.delete(livesetId)
+            } else {
+                favoriteDao.upsert(FavoriteEntity(livesetId = livesetId))
             }
-            throw e
+
+            try {
+                if (wasFavorited) {
+                    api.removeFavorite(livesetId)
+                } else {
+                    api.addFavorite(livesetId)
+                }
+                return !wasFavorited
+            } catch (e: Exception) {
+                Log.w("FavoritesRepository", "Failed to toggle favorite, reverting", e)
+                if (wasFavorited) {
+                    favoriteDao.upsert(FavoriteEntity(livesetId = livesetId))
+                } else {
+                    favoriteDao.delete(livesetId)
+                }
+                throw e
+            }
+        } finally {
+            inFlight.remove(livesetId)
         }
     }
 }
