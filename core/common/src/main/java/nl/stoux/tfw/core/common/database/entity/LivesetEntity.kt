@@ -41,4 +41,8 @@ data class LivesetEntity(
     val lqUrl: String? = null,
     val hqUrl: String? = null,
     val losslessUrl: String? = null,
+    // Social/stats fields
+    val playsCount: Int? = null,
+    val favoritesCount: Int? = null,
+    val isFavorited: Boolean? = null,
 )

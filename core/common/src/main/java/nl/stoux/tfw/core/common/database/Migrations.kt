@@ -70,5 +70,17 @@ object Migrations {
         }
     }
 
-    val ALL_MIGRATIONS = arrayOf(MIGRATION_4_5)
+    /**
+     * Migration from version 5 to 6:
+     * - Add social/stats columns to livesets table
+     */
+    val MIGRATION_5_6 = object : Migration(5, 6) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE livesets ADD COLUMN playsCount INTEGER DEFAULT NULL")
+            db.execSQL("ALTER TABLE livesets ADD COLUMN favoritesCount INTEGER DEFAULT NULL")
+            db.execSQL("ALTER TABLE livesets ADD COLUMN isFavorited INTEGER DEFAULT NULL")
+        }
+    }
+
+    val ALL_MIGRATIONS = arrayOf(MIGRATION_4_5, MIGRATION_5_6)
 }

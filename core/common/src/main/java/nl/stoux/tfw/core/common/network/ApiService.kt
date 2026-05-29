@@ -15,7 +15,7 @@ import nl.stoux.tfw.core.common.network.dto.auth.JoinSessionRequest
 import nl.stoux.tfw.core.common.network.dto.auth.JoinSessionResponse
 import nl.stoux.tfw.core.common.network.dto.auth.LiveSessionDto
 import nl.stoux.tfw.core.common.network.dto.auth.LoginRequest
-import nl.stoux.tfw.core.common.network.dto.auth.PlaybackPositionDto
+import nl.stoux.tfw.core.common.network.dto.auth.PlaybackPositionsListResponse
 import nl.stoux.tfw.core.common.network.dto.auth.PlaybackStartRequest
 import nl.stoux.tfw.core.common.network.dto.auth.PlaybackStartResponse
 import nl.stoux.tfw.core.common.network.dto.auth.PlaylistDto
@@ -117,7 +117,7 @@ interface ApiService {
     // --- Playback Positions ---
 
     @GET("playback/positions")
-    suspend fun getPlaybackPositions(): List<PlaybackPositionDto>
+    suspend fun getPlaybackPositions(): PlaybackPositionsListResponse
 
     @PUT("playback/positions/{livesetId}")
     suspend fun savePlaybackPosition(

@@ -19,7 +19,7 @@ import nl.stoux.tfw.core.common.database.entity.TrackEntity
         ManualQueueItemEntity::class,
         LivesetDownloadEntity::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {

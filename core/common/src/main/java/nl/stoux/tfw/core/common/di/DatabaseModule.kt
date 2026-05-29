@@ -23,7 +23,7 @@ object DatabaseModule {
     fun provideDatabase(@ApplicationContext context: Context): AppDatabase =
         Room.databaseBuilder(context, AppDatabase::class.java, "tfw.db")
             .addMigrations(*Migrations.ALL_MIGRATIONS)
-            .fallbackToDestructiveMigrationFrom(1, 2, 3) // Wipe DB for versions before downloads feature
+            .fallbackToDestructiveMigrationFrom(1, 2, 3)
             .fallbackToDestructiveMigrationOnDowngrade()
             .build()
 

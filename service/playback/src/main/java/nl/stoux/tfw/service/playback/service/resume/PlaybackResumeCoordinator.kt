@@ -5,9 +5,12 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import nl.stoux.tfw.core.common.repository.PlaybackPositionRepository
 import nl.stoux.tfw.service.playback.service.session.CustomMediaId
 import nl.stoux.tfw.service.playback.service.session.LibraryManager
 import javax.inject.Inject
@@ -17,17 +20,20 @@ import javax.inject.Singleton
  * Coordinator that manages the last playing state of the service.
  * - Saves last played mediaId + position when playback stops/pauses
  * - Restores the last played item on service start
+ * - Syncs positions to server for cross-device resume
  */
 @Singleton
 class PlaybackResumeCoordinator @Inject constructor(
     private val playbackStateRepository: PlaybackStateRepository,
     private val libraryManager: LibraryManager,
     private val queueManager: nl.stoux.tfw.service.playback.service.queue.QueueManager,
+    private val playbackPositionRepository: PlaybackPositionRepository,
 ) : Player.Listener {
 
     // Use IO scope for persistence and loading; hop to Main when touching the Player
     private val scope = CoroutineScope(Dispatchers.IO)
     private var listener: Player.Listener? = null
+    private var serverSyncJob: Job? = null
 
     fun attach(player: Player) {
         // Restore last state on attach
@@ -43,6 +49,9 @@ class PlaybackResumeCoordinator @Inject constructor(
                     scope.launch {
                         resolvePlayerStateAndStore(player)
                     }
+                    stopServerSync()
+                } else {
+                    startServerSync(player)
                 }
             }
         }
@@ -62,9 +71,15 @@ class PlaybackResumeCoordinator @Inject constructor(
             }
         }
         if (state != null) {
-            // Persist on IO
+            // Persist locally on IO
             playbackStateRepository.saveState(state)
             Log.d("PlaybackResume", "Saved state: ${state.mediaId}@${state.positionMs}")
+
+            // Also sync to server
+            val livesetId = CustomMediaId.from(state.mediaId).getLivesetId()
+            if (livesetId != null) {
+                playbackPositionRepository.savePosition(livesetId, state.positionMs / 1000)
+            }
         }
     }
 
@@ -74,11 +89,27 @@ class PlaybackResumeCoordinator @Inject constructor(
             listener?.let { player.removeListener(it) }
             listener = null
         }
+        stopServerSync()
 
         // Save the state one last time
         withContext(Dispatchers.IO) {
             resolvePlayerStateAndStore(player)
         }
+    }
+
+    private fun startServerSync(player: Player) {
+        serverSyncJob?.cancel()
+        serverSyncJob = scope.launch {
+            while (true) {
+                delay(30_000) // Sync every 30 seconds
+                resolvePlayerStateAndStore(player)
+            }
+        }
+    }
+
+    private fun stopServerSync() {
+        serverSyncJob?.cancel()
+        serverSyncJob = null
     }
 
     private suspend fun tryRestore(player: Player) {

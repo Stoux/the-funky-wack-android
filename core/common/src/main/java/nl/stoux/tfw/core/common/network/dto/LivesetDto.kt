@@ -30,6 +30,10 @@ data class LivesetDto(
     val audio_waveform_url: String? = null,
     val tracks: List<LivesetTrackDto>? = null,
     val files: LivesetFilesByQualityDto? = null,
+    // Social/stats fields from updated API
+    val plays_count: Int? = null,
+    val favorites_count: Int? = null,
+    val is_favorited: Boolean? = null,
 )
 
 @Serializable

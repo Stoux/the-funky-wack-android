@@ -30,6 +30,7 @@ import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 import nl.stoux.tfw.service.playback.download.DownloadTracker
 import nl.stoux.tfw.service.playback.player.PlayerManager
+import nl.stoux.tfw.service.playback.tracking.PlaybackTracker
 import nl.stoux.tfw.service.playback.service.manager.LivesetTrackListener
 import nl.stoux.tfw.service.playback.service.manager.LivesetTrackManager
 import nl.stoux.tfw.service.playback.service.manager.NotificationUpdateCallback
@@ -61,6 +62,8 @@ class MediaPlaybackService : MediaLibraryService() {
     @Inject lateinit var queueManager: QueueManager
 
     @Inject lateinit var downloadTracker: DownloadTracker
+
+    @Inject lateinit var playbackTracker: PlaybackTracker
 
     private var mediaLibrarySession: MediaLibrarySession? = null
 
@@ -106,6 +109,9 @@ class MediaPlaybackService : MediaLibraryService() {
 
         // Attach resume/persist coordinator (restores last state and starts listening)
         resumeCoordinator.attach(player)
+
+        // Attach playback tracker for server-side play counting
+        playbackTracker.attach(player)
 
         // Add listener
         trackManagerUnbindCallback = trackManager.bind(TrackListener())
@@ -189,6 +195,7 @@ class MediaPlaybackService : MediaLibraryService() {
         queueManager.release()
         trackManager.release()
         downloadTracker.release()
+        playbackTracker.release()
 
         // Detach coordinator before releasing player (fire-and-forget, best-effort save)
         serviceIOScope.launch {

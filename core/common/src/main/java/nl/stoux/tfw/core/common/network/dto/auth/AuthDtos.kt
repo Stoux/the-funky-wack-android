@@ -173,6 +173,11 @@ data class ReorderItem(
 // --- Playback Positions ---
 
 @Serializable
+data class PlaybackPositionsListResponse(
+    val positions: List<PlaybackPositionDto>,
+)
+
+@Serializable
 data class PlaybackPositionDto(
     @SerialName("liveset_id") val livesetId: Long,
     val position: Long, // in seconds

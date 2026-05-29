@@ -46,6 +46,9 @@ fun LivesetDto.toLivesetEntity(): LivesetEntity = LivesetEntity(
     lqUrl = files?.lq,
     hqUrl = files?.hq,
     losslessUrl = files?.lossless,
+    playsCount = plays_count,
+    favoritesCount = favorites_count,
+    isFavorited = is_favorited,
 )
 
 fun LivesetTrackDto.toTrackEntity(): TrackEntity = TrackEntity(
