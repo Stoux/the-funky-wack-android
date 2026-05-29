@@ -59,6 +59,9 @@ dependencies {
     // Pusher (for the listen-along coordinator wrapping ReverbClient)
     implementation(libs.pusher.java.client)
 
+    // Retrofit (HttpException type used in PlaybackTracker error handling)
+    implementation(libs.retrofit)
+
     // Kotlinx Serialization JSON (parsing Pusher event payloads)
     implementation(libs.serialization.json)
 

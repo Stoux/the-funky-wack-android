@@ -28,6 +28,10 @@ object NetworkModule {
     fun provideJson(): Json = Json {
         ignoreUnknownKeys = true
         isLenient = true
+        // Default kotlinx-serialization behaviour silently drops fields whose value
+        // equals the declared default — this was hiding `event = "start"` from
+        // PlaybackStartRequest bodies and tripping the server's `required` validation.
+        encodeDefaults = true
     }
 
     @Provides

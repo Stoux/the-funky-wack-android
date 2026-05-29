@@ -14,6 +14,7 @@ import nl.stoux.tfw.core.common.device.DeviceIdManager
 import nl.stoux.tfw.core.common.network.ApiService
 import nl.stoux.tfw.core.common.network.dto.auth.PlaybackEventRequest
 import nl.stoux.tfw.core.common.network.dto.auth.PlaybackStartRequest
+import retrofit2.HttpException
 import nl.stoux.tfw.service.playback.service.session.CustomMediaId
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -114,19 +115,25 @@ class PlaybackTracker @Inject constructor(
 
         scope.launch {
             try {
-                val position = withContext(Dispatchers.Main) { player.currentPosition }
-                lastPlayingPositionSec = position / 1000
+                val rawPositionMs = withContext(Dispatchers.Main) { player.currentPosition }
+                // Player can return Long.MIN_VALUE (C.TIME_UNSET) before prepared,
+                // and the server validates position >= 0 — clamp before sending.
+                val positionSec = (rawPositionMs / 1000).coerceAtLeast(0L)
+                lastPlayingPositionSec = positionSec
                 val response = api.startPlaybackSession(
                     PlaybackStartRequest(
                         livesetId = livesetId,
                         event = "start",
-                        position = lastPlayingPositionSec,
+                        position = positionSec,
                         platform = "android",
                         clientId = deviceIdManager.clientId,
                     )
                 )
                 currentSessionId = response.playHistoryId
                 Log.d(TAG, "Started session ${response.playHistoryId} for liveset $livesetId")
+            } catch (e: HttpException) {
+                val body = runCatching { e.response()?.errorBody()?.string() }.getOrNull()
+                Log.w(TAG, "Failed to start playback session: HTTP ${e.code()} body=$body")
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to start playback session", e)
             }
