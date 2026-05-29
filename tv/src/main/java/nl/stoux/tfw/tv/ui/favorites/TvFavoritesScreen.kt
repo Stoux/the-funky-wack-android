@@ -5,13 +5,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.Button
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -21,12 +19,16 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.tv.material3.Button
+import androidx.tv.material3.MaterialTheme
+import androidx.tv.material3.Text
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import nl.stoux.tfw.core.common.database.dao.LivesetWithDetails
 import nl.stoux.tfw.core.common.repository.FavoritesRepository
 import nl.stoux.tfw.service.playback.service.queue.QueueManager
+import nl.stoux.tfw.tv.ui.browse.LivesetListItem
 import javax.inject.Inject
 
 @HiltViewModel
@@ -40,8 +42,8 @@ class TvFavoritesViewModel @Inject constructor(
     }
 
     fun playLiveset(livesetId: Long) {
-        queueManager.setContextFromLiveset(
-            livesetId = livesetId,
+        queueManager.setContextFromFavorites(
+            startLivesetId = livesetId,
             startPositionMs = 0L,
             autoplay = true,
         )
@@ -70,16 +72,18 @@ fun TvFavoritesScreen(
             }
         } else {
             LazyColumn(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 items(favorites, key = { it.liveset.id }) { lwd ->
-                    Button(onClick = {
-                        viewModel.playLiveset(lwd.liveset.id)
-                        onLivesetClick(lwd.liveset.id)
-                    }) {
-                        Text("${lwd.liveset.title} - ${lwd.liveset.artistName}")
-                    }
+                    LivesetListItem(
+                        liveset = lwd,
+                        onClick = {
+                            viewModel.playLiveset(lwd.liveset.id)
+                            onLivesetClick(lwd.liveset.id)
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
                 }
             }
         }
