@@ -1,6 +1,7 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.hilt)
     alias(libs.plugins.ksp)
 }
@@ -30,6 +31,10 @@ android {
             )
         }
     }
+
+    buildFeatures {
+        compose = true
+    }
 }
 
 dependencies {
@@ -49,8 +54,19 @@ dependencies {
     // Media3 controller to control playback service from templates
     implementation(libs.media3.session)
 
+    // Retrofit (for HttpException in login error handling)
+    implementation(libs.retrofit)
+
     // Coroutines for background work
     implementation(libs.coroutines.android)
+
+    // Compose for the device-code login activity
+    implementation(platform(libs.androidx.compose.bom))
+    implementation(libs.androidx.activity.compose)
+    implementation(libs.androidx.compose.ui)
+    implementation(libs.androidx.compose.material3)
+    implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation(libs.hilt.navigation.compose)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
