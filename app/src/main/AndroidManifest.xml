@@ -17,13 +17,15 @@
             android:name="com.google.android.gms.cast.framework.OPTIONS_PROVIDER_CLASS_NAME"
             android:value="nl.stoux.tfw.CastOptionsProvider" />
 
-        <!-- Sentry error reporting -->
+        <!-- Sentry error reporting (auto-init gated per build type to fully disable on debug) -->
+        <meta-data android:name="io.sentry.auto-init" android:value="${SENTRY_AUTO_INIT}" />
         <meta-data android:name="io.sentry.dsn" android:value="${SENTRY_DSN}" />
         <meta-data android:name="io.sentry.environment" android:value="${SENTRY_ENVIRONMENT}" />
         <meta-data android:name="io.sentry.debug" android:value="false" />
         <meta-data android:name="io.sentry.traces.sample-rate" android:value="0.1" />
         <meta-data android:name="io.sentry.attach-screenshot" android:value="true" />
         <meta-data android:name="io.sentry.attach-stacktrace" android:value="true" />
+        <meta-data android:name="io.sentry.anr.enable" android:value="${SENTRY_ANR_ENABLED}" />
 
         <!-- Android Auto support -->
         <meta-data

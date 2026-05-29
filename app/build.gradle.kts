@@ -39,12 +39,18 @@ android {
 
     buildTypes {
         debug {
-            // Sentry disabled in debug builds — empty DSN prevents init, no events sent.
+            // Sentry fully disabled in debug — auto-init off prevents the SDK from
+            // installing its lifecycle hooks (including the ANR watchdog that was
+            // still pinging from debug builds with just an empty DSN).
+            manifestPlaceholders["SENTRY_AUTO_INIT"] = "false"
+            manifestPlaceholders["SENTRY_ANR_ENABLED"] = "false"
             manifestPlaceholders["SENTRY_DSN"] = ""
             manifestPlaceholders["SENTRY_ENVIRONMENT"] = "debug"
         }
         release {
             val secrets = loadSecrets(isProd = true)
+            manifestPlaceholders["SENTRY_AUTO_INIT"] = "true"
+            manifestPlaceholders["SENTRY_ANR_ENABLED"] = "true"
             manifestPlaceholders["SENTRY_DSN"] = secrets.getProperty("SENTRY_DSN")
                 ?: System.getenv("SENTRY_DSN")
                 ?: ""
