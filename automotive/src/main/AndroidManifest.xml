@@ -24,13 +24,13 @@
 
         <activity
             android:name=".AutomotiveLoginActivity"
-            android:exported="true"
+            android:exported="false"
             android:label="@string/app_name"
             android:launchMode="singleTop"
             android:theme="@style/Theme.TheFunkyWack">
             <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
+                <action android:name="nl.stoux.tfw.automotive.action.PAIR" />
+                <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>
 

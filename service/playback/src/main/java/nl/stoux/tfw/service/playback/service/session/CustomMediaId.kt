@@ -49,6 +49,8 @@ data class CustomMediaId(
         private const val MENU_ID_SETTINGS = "root.settings"
         // => Actions
         private const val ACTION_REFRESH_LIVESETS = "settings.refresh"
+        private const val ACTION_PAIR_DEVICE = "settings.pair"
+        private const val ACTION_SIGN_OUT = "settings.signout"
 
         // Item types
         private const val TYPE_EDITION = "edition"
@@ -64,6 +66,8 @@ data class CustomMediaId(
         val ROOT_CONTINUE = CustomMediaId(MENU_ID_CONTINUE)
         val ROOT_SETTINGS = CustomMediaId(MENU_ID_SETTINGS)
         val SETTINGS_REFRESH = CustomMediaId(ACTION_REFRESH_LIVESETS)
+        val SETTINGS_PAIR = CustomMediaId(ACTION_PAIR_DEVICE)
+        val SETTINGS_SIGN_OUT = CustomMediaId(ACTION_SIGN_OUT)
 
         fun forPlaylist(shareCode: String): CustomMediaId =
             CustomMediaId("$TYPE_PLAYLIST:$shareCode", TYPE_PLAYLIST, shareCode = shareCode)
@@ -91,6 +95,8 @@ data class CustomMediaId(
             if (mediaId == MENU_ID_CONTINUE) return ROOT_CONTINUE
             if (mediaId == MENU_ID_SETTINGS) return ROOT_SETTINGS
             if (mediaId == ACTION_REFRESH_LIVESETS) return SETTINGS_REFRESH
+            if (mediaId == ACTION_PAIR_DEVICE) return SETTINGS_PAIR
+            if (mediaId == ACTION_SIGN_OUT) return SETTINGS_SIGN_OUT
 
             // Check if we're a ID'd type
             val typeAndIds = mediaId.split(':', limit = 2)

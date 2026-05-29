@@ -1,11 +1,15 @@
 package nl.stoux.tfw.service.playback.service.session
 
 import android.annotation.SuppressLint
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Bundle
 import android.util.Log
 import androidx.core.net.toUri
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -35,6 +39,7 @@ const val EXTRA_FROM_FAVORITES = "tfw.source_favorites"
 
 @Singleton
 class LibraryManager @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val editionRepository: EditionRepository,
     private val sessionSettings: SessionSettings,
     private val authRepository: AuthRepository,
@@ -42,6 +47,10 @@ class LibraryManager @Inject constructor(
     private val playlistRepository: PlaylistRepository,
     private val playbackPositionRepository: PlaybackPositionRepository,
 ) {
+
+    private val isAutomotive: Boolean by lazy {
+        context.packageManager.hasSystemFeature(PackageManager.FEATURE_AUTOMOTIVE)
+    }
 
     // Initialize to current time to prevent refreshIfStale() from triggering during startup race
     // The actual refresh in init() will update this to the real completion time
@@ -118,6 +127,8 @@ class LibraryManager @Inject constructor(
             mediaId == CustomMediaId.ROOT_CONTINUE -> getContinueListening(page, pageSize)
             mediaId == CustomMediaId.ROOT_SETTINGS -> getSettings(page, pageSize)
             mediaId == CustomMediaId.SETTINGS_REFRESH -> getRefreshStatus()
+            mediaId == CustomMediaId.SETTINGS_PAIR -> handlePairAction()
+            mediaId == CustomMediaId.SETTINGS_SIGN_OUT -> handleSignOutAction()
 
             // Show items inside another item
             mediaId.isEdition() -> getEditionLivesets(mediaId, page, pageSize)
@@ -155,18 +166,67 @@ class LibraryManager @Inject constructor(
     }
 
     private fun getSettings(page: Int, pageSize: Int): List<MediaItem> {
-        return listOf(
-            MediaItem.Builder()
-                .setMediaId(CustomMediaId.SETTINGS_REFRESH.original)
-                .setMediaMetadata(
-                    MediaMetadata.Builder()
-                        .setTitle("Refresh livesets")
-                        .setIsBrowsable(true)
-                        .setIsPlayable(false)
-                        .build()
-                )
-                .build()
-        )
+        val items = mutableListOf<MediaItem>()
+        items.add(actionItem(CustomMediaId.SETTINGS_REFRESH, "Refresh livesets"))
+        if (isAutomotive) {
+            if (authRepository.isLoggedIn.value) {
+                items.add(actionItem(CustomMediaId.SETTINGS_SIGN_OUT, "Sign out"))
+            } else {
+                items.add(actionItem(CustomMediaId.SETTINGS_PAIR, "Pair this car"))
+            }
+        }
+        return items
+    }
+
+    private fun actionItem(id: CustomMediaId, title: String): MediaItem {
+        return MediaItem.Builder()
+            .setMediaId(id.original)
+            .setMediaMetadata(
+                MediaMetadata.Builder()
+                    .setTitle(title)
+                    .setIsBrowsable(true)
+                    .setIsPlayable(false)
+                    .build()
+            )
+            .build()
+    }
+
+    private fun handlePairAction(): List<MediaItem> {
+        val intent = Intent("nl.stoux.tfw.automotive.action.PAIR").apply {
+            setPackage(context.packageName)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        runCatching { context.startActivity(intent) }
+            .onFailure { Log.w("LibraryManager", "Failed to launch pair activity", it) }
+        return listOf(statusItem("settings.pair.status", "Follow instructions on screen"))
+    }
+
+    private fun handleSignOutAction(): List<MediaItem> {
+        CoroutineScope(Dispatchers.IO).launch {
+            runCatching { authRepository.logout() }
+            childrenChangedCallback?.onChildrenChanged(
+                CustomMediaId.ROOT_SETTINGS.original,
+                getSettings(0, Int.MAX_VALUE).size,
+            )
+            childrenChangedCallback?.onChildrenChanged(
+                CustomMediaId.ROOT.original,
+                getRootChildrenCount(),
+            )
+        }
+        return listOf(statusItem("settings.signout.status", "Signed out"))
+    }
+
+    private fun statusItem(mediaId: String, title: String): MediaItem {
+        return MediaItem.Builder()
+            .setMediaId(mediaId)
+            .setMediaMetadata(
+                MediaMetadata.Builder()
+                    .setTitle(title)
+                    .setIsBrowsable(false)
+                    .setIsPlayable(false)
+                    .build()
+            )
+            .build()
     }
 
     private fun getRefreshStatus(): List<MediaItem> {
