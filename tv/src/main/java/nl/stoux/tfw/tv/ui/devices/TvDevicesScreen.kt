@@ -24,6 +24,7 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import nl.stoux.tfw.core.common.device.DeviceIdManager
 import nl.stoux.tfw.core.common.network.dto.auth.DeviceDto
 import nl.stoux.tfw.core.common.repository.DeviceRepository
 import javax.inject.Inject
@@ -31,8 +32,10 @@ import javax.inject.Inject
 @HiltViewModel
 class TvDevicesViewModel @Inject constructor(
     private val repository: DeviceRepository,
+    deviceIdManager: DeviceIdManager,
 ) : ViewModel() {
     val devices: StateFlow<List<DeviceDto>> = repository.devices
+    val currentClientId: String = deviceIdManager.clientId
 
     init {
         viewModelScope.launch { repository.refresh() }
@@ -57,6 +60,7 @@ fun TvDevicesScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 items(devices, key = { it.id }) { device ->
+                    val isCurrent = device.clientId == viewModel.currentClientId
                     Card(modifier = Modifier.fillMaxWidth()) {
                         Column(modifier = Modifier.padding(16.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -65,7 +69,7 @@ fun TvDevicesScreen(
                                     style = MaterialTheme.typography.titleMedium,
                                     modifier = Modifier.weight(1f),
                                 )
-                                if (device.isCurrent) {
+                                if (isCurrent) {
                                     Text(
                                         "This device",
                                         style = MaterialTheme.typography.labelMedium,

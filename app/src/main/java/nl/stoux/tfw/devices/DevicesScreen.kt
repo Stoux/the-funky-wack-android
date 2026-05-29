@@ -46,6 +46,7 @@ fun DevicesScreen(
             items(devices, key = { it.id }) { device ->
                 DeviceCard(
                     device = device,
+                    isCurrent = device.clientId == viewModel.currentClientId,
                     onRename = { renameTarget = device },
                     onToggleHidden = { viewModel.setHidden(device.id, !device.isHidden) },
                     onRemove = { viewModel.remove(device.id) },
@@ -69,6 +70,7 @@ fun DevicesScreen(
 @Composable
 private fun DeviceCard(
     device: DeviceDto,
+    isCurrent: Boolean,
     onRename: () -> Unit,
     onToggleHidden: () -> Unit,
     onRemove: () -> Unit,
@@ -81,7 +83,7 @@ private fun DeviceCard(
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.weight(1f),
                 )
-                if (device.isCurrent) {
+                if (isCurrent) {
                     Text("This device", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                 }
             }
@@ -94,7 +96,7 @@ private fun DeviceCard(
             Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
                 TextButton(onClick = onRename) { Text("Rename") }
                 TextButton(onClick = onToggleHidden) { Text(if (device.isHidden) "Show" else "Hide") }
-                if (!device.isCurrent) {
+                if (!isCurrent) {
                     TextButton(onClick = onRemove) { Text("Remove") }
                 }
             }
