@@ -5,9 +5,13 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
+import nl.stoux.tfw.tv.ui.auth.TvDeviceCodeScreen
 import nl.stoux.tfw.tv.ui.browse.TvBrowseScreen
 import nl.stoux.tfw.tv.ui.browse.TvEditionDetailScreen
+import nl.stoux.tfw.tv.ui.favorites.TvFavoritesScreen
+import nl.stoux.tfw.tv.ui.live.TvLiveScreen
 import nl.stoux.tfw.tv.ui.player.TvNowPlayingScreen
+import nl.stoux.tfw.tv.ui.playlists.TvPlaylistsScreen
 import nl.stoux.tfw.tv.ui.settings.TvSettingsScreen
 
 @Composable
@@ -31,7 +35,19 @@ fun TvNavHost() {
                 },
                 onSettingsClick = {
                     navController.navigate(TvDestination.Settings)
-                }
+                },
+                onFavoritesClick = {
+                    navController.navigate(TvDestination.Favorites)
+                },
+                onPlaylistsClick = {
+                    navController.navigate(TvDestination.Playlists)
+                },
+                onLiveClick = {
+                    navController.navigate(TvDestination.Live)
+                },
+                onLoginClick = {
+                    navController.navigate(TvDestination.DeviceCodeLogin)
+                },
             )
         }
 
@@ -58,6 +74,58 @@ fun TvNavHost() {
 
         composable<TvDestination.Settings> {
             TvSettingsScreen(
+                onBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        composable<TvDestination.DeviceCodeLogin> {
+            TvDeviceCodeScreen(
+                onAuthorized = {
+                    navController.popBackStack()
+                },
+                onBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        composable<TvDestination.Favorites> {
+            TvFavoritesScreen(
+                onLivesetClick = { livesetId ->
+                    navController.navigate(TvDestination.NowPlaying)
+                },
+                onBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        composable<TvDestination.Playlists> {
+            TvPlaylistsScreen(
+                onPlaylistClick = { shareCode ->
+                    navController.navigate(TvDestination.PlaylistDetail(shareCode))
+                },
+                onBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        composable<TvDestination.PlaylistDetail> { backStackEntry ->
+            val route: TvDestination.PlaylistDetail = backStackEntry.toRoute()
+            // Simple playlist detail - reuses PlaylistsViewModel for now
+            TvPlaylistsScreen(
+                onPlaylistClick = { /* Already in detail */ },
+                onBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        composable<TvDestination.Live> {
+            TvLiveScreen(
                 onBack = {
                     navController.popBackStack()
                 }

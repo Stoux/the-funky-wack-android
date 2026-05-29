@@ -14,4 +14,19 @@ sealed interface TvDestination {
 
     @Serializable
     data object Settings : TvDestination
+
+    @Serializable
+    data object DeviceCodeLogin : TvDestination
+
+    @Serializable
+    data object Favorites : TvDestination
+
+    @Serializable
+    data object Playlists : TvDestination
+
+    @Serializable
+    data class PlaylistDetail(val shareCode: String) : TvDestination
+
+    @Serializable
+    data object Live : TvDestination
 }

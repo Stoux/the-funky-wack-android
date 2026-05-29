@@ -38,6 +38,10 @@ fun TvBrowseScreen(
     onLivesetClick: (Long) -> Unit,
     onNowPlayingClick: () -> Unit,
     onSettingsClick: () -> Unit,
+    onFavoritesClick: () -> Unit = {},
+    onPlaylistsClick: () -> Unit = {},
+    onLiveClick: () -> Unit = {},
+    onLoginClick: () -> Unit = {},
     viewModel: TvBrowseViewModel = hiltViewModel(),
 ) {
     val editions by viewModel.editions.collectAsState()
