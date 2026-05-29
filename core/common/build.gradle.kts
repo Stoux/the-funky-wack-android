@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.android)
@@ -5,6 +7,22 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.hilt)
 }
+
+// Load secrets for API keys (not tracked in git).
+// Uses secrets.prod.properties for release builds, falls back to secrets.properties.
+fun loadSecrets(isProd: Boolean): Properties = Properties().apply {
+    val prodFile = rootProject.file("secrets.prod.properties")
+    val defaultFile = rootProject.file("secrets.properties")
+    when {
+        isProd && prodFile.exists() -> load(prodFile.inputStream())
+        defaultFile.exists() -> load(defaultFile.inputStream())
+    }
+}
+
+fun reverbAppKey(isProd: Boolean): String =
+    loadSecrets(isProd).getProperty("REVERB_APP_KEY")
+        ?: System.getenv("REVERB_APP_KEY")
+        ?: ""
 
 android {
     namespace = "nl.stoux.tfw.core.common"
@@ -17,8 +35,17 @@ android {
         consumerProguardFiles("consumer-rules.pro")
     }
 
+    buildFeatures {
+        buildConfig = true
+    }
+
     buildTypes {
+        debug {
+            buildConfigField("String", "REVERB_APP_KEY", "\"${reverbAppKey(isProd = false)}\"")
+        }
         release {
+            buildConfigField("String", "REVERB_APP_KEY", "\"${reverbAppKey(isProd = true)}\"")
+
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
