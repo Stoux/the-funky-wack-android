@@ -62,6 +62,9 @@ class ListenAlongCoordinator @Inject constructor(
         _sessionCount.value = count
     }
 
+    @Volatile private var presenceLiveSubscribers = 0
+    private val presenceLiveLock = Any()
+
     data class ActiveRoom(
         val channelToken: String,
         val mode: String, // "synced" | "independent"
@@ -264,6 +267,10 @@ class ListenAlongCoordinator @Inject constructor(
      * on exit.
      */
     fun subscribePresenceLive() {
+        synchronized(presenceLiveLock) {
+            presenceLiveSubscribers += 1
+            if (presenceLiveSubscribers > 1) return // already bound, just bump refcount
+        }
         reverbClient.connect()
         val name = "presence-live"
         val channel = reverbClient.subscribePresence(name, presenceListener) ?: run {
@@ -276,6 +283,10 @@ class ListenAlongCoordinator @Inject constructor(
     }
 
     fun unsubscribePresenceLive() {
+        synchronized(presenceLiveLock) {
+            presenceLiveSubscribers = (presenceLiveSubscribers - 1).coerceAtLeast(0)
+            if (presenceLiveSubscribers > 0) return // still active subscribers
+        }
         reverbClient.unsubscribe("presence-live")
     }
 

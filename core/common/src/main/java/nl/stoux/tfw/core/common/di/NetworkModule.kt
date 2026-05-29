@@ -28,10 +28,13 @@ object NetworkModule {
     fun provideJson(): Json = Json {
         ignoreUnknownKeys = true
         isLenient = true
-        // Default kotlinx-serialization behaviour silently drops fields whose value
-        // equals the declared default — this was hiding `event = "start"` from
-        // PlaybackStartRequest bodies and tripping the server's `required` validation.
+        // encodeDefaults so fields like `event = "start"` actually serialize
+        // (default value would otherwise be stripped, triggering server `required`).
         encodeDefaults = true
+        // explicitNulls = false so optional fields left at null don't serialize
+        // — the server validates fields with non-nullable rules (e.g. `integer`)
+        // and rejects an explicit null with 422.
+        explicitNulls = false
     }
 
     @Provides
@@ -64,16 +67,22 @@ object NetworkModule {
             chain.proceed(request)
         }
 
-        // Auth interceptor: adds Bearer token if logged in
+        // Auth interceptor: adds Bearer token if logged in. The 401 -> clearAuth
+        // branch is intentionally scoped to API requests under /api/* — channel
+        // auth (Pusher) and other guests-allowed endpoints can legitimately return
+        // 401 without invalidating the user's Sanctum session.
         val authInterceptor = Interceptor { chain ->
             val requestBuilder = chain.request().newBuilder()
             val token = authRepository.get().token
             if (token != null) {
                 requestBuilder.header("Authorization", "Bearer $token")
             }
-            val response = chain.proceed(requestBuilder.build())
-            // Handle 401: clear auth state directly
-            if (response.code == 401) {
+            val request = requestBuilder.build()
+            val response = chain.proceed(request)
+            if (response.code == 401 &&
+                request.url.encodedPath.startsWith("/api/") &&
+                !request.url.encodedPath.startsWith("/api/broadcast/auth")
+            ) {
                 authRepository.get().onUnauthorized()
             }
             response

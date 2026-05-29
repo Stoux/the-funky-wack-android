@@ -33,7 +33,7 @@ class PlaybackTracker @Inject constructor(
     private val authRepository: AuthRepository,
     private val deviceIdManager: DeviceIdManager,
 ) {
-    private val scope = CoroutineScope(Dispatchers.IO)
+    private val scope = CoroutineScope(kotlinx.coroutines.SupervisorJob() + Dispatchers.IO)
     private var listener: Player.Listener? = null
     private var attachedPlayer: Player? = null
     private var currentSessionId: Long? = null
@@ -43,6 +43,9 @@ class PlaybackTracker @Inject constructor(
     private var lastPlayingPositionSec: Long = 0L
 
     fun attach(player: Player) {
+        // Detach from previous player if any (Cast switch, etc.) so we don't
+        // leave a stale Player.Listener bound on the old instance.
+        attachedPlayer?.let { prev -> listener?.let { prev.removeListener(it) } }
         attachedPlayer = player
         val trackingListener = object : Player.Listener {
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
@@ -78,8 +81,8 @@ class PlaybackTracker @Inject constructor(
             ) {
                 if (reason == Player.DISCONTINUITY_REASON_SEEK) {
                     val sessionId = currentSessionId ?: return
-                    val fromSec = oldPosition.positionMs / 1000
-                    val toSec = newPosition.positionMs / 1000
+                    val fromSec = (oldPosition.positionMs / 1000).coerceAtLeast(0L)
+                    val toSec = (newPosition.positionMs / 1000).coerceAtLeast(0L)
                     scope.launch {
                         runCatching {
                             api.trackPlaybackEvent(
@@ -90,7 +93,7 @@ class PlaybackTracker @Inject constructor(
                                     fromPosition = fromSec,
                                 )
                             )
-                        }.onFailure { Log.w(TAG, "seek event failed", it) }
+                        }.onFailure { logEventFailure("seek", it) }
                     }
                 }
             }
@@ -161,11 +164,11 @@ class PlaybackTracker @Inject constructor(
                         PlaybackEventRequest(
                             event = "progress",
                             playHistoryId = sessionId,
-                            position = positionSec,
+                            position = positionSec.coerceAtLeast(0L),
                             durationListened = listenedSecondsAccumulator,
                         )
                     )
-                }.onFailure { Log.w(TAG, "progress event failed", it) }
+                }.onFailure { logEventFailure("progress", it) }
             }
         }
     }
@@ -179,11 +182,20 @@ class PlaybackTracker @Inject constructor(
                     PlaybackEventRequest(
                         event = event,
                         playHistoryId = sessionId,
-                        position = positionSec,
+                        position = positionSec.coerceAtLeast(0L),
                         durationListened = if (event == "stop") listenedSecondsAccumulator else null,
                     )
                 )
-            }.onFailure { Log.w(TAG, "$event event failed", it) }
+            }.onFailure { logEventFailure(event, it) }
+        }
+    }
+
+    private fun logEventFailure(event: String, t: Throwable) {
+        if (t is HttpException) {
+            val body = runCatching { t.response()?.errorBody()?.string() }.getOrNull()
+            Log.w(TAG, "$event event failed: HTTP ${t.code()} body=$body")
+        } else {
+            Log.w(TAG, "$event event failed", t)
         }
     }
 

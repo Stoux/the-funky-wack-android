@@ -203,7 +203,13 @@ class MediaPlaybackService : MediaLibraryService() {
 
         // Tear down listen-along membership + the Reverb websocket so the app
         // doesn't leave the user listed as an active listener after swipe-stop.
-        serviceIOScope.launch { runCatching { listenAlongCoordinator.leave() } }
+        // Block briefly here — the earlier fire-and-forget launch raced with
+        // serviceIOScope.cancel() below and never reached the HTTP leave call.
+        runCatching {
+            kotlinx.coroutines.runBlocking {
+                kotlinx.coroutines.withTimeoutOrNull(2000) { listenAlongCoordinator.leave() }
+            }
+        }
         reverbClient.disconnect()
 
         // Detach coordinator before releasing player (fire-and-forget, best-effort save)
