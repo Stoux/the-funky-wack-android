@@ -37,6 +37,7 @@ import kotlinx.coroutines.launch
 import nl.stoux.tfw.core.common.auth.AuthRepository
 import nl.stoux.tfw.core.common.database.dao.LivesetWithDetails
 import nl.stoux.tfw.core.common.database.entity.artworkUrl
+import nl.stoux.tfw.core.common.device.DeviceIdManager
 import nl.stoux.tfw.core.common.repository.EditionRepository
 import nl.stoux.tfw.core.common.repository.PlaybackPositionRepository
 import javax.inject.Inject
@@ -44,12 +45,15 @@ import javax.inject.Inject
 data class TvContinueItem(
     val liveset: LivesetWithDetails,
     val positionSeconds: Long,
+    val deviceLabel: String?,
+    val deviceType: String?,
 )
 
 @HiltViewModel
 class TvContinueListeningViewModel @Inject constructor(
     private val positionRepository: PlaybackPositionRepository,
     private val editionRepository: EditionRepository,
+    private val deviceIdManager: DeviceIdManager,
     authRepository: AuthRepository,
 ) : ViewModel() {
 
@@ -57,10 +61,21 @@ class TvContinueListeningViewModel @Inject constructor(
         positionRepository.positions,
         editionRepository.cachedLivesets,
     ) { positions, _ ->
-        positions.mapNotNull { pos ->
-            val lwd = editionRepository.getCachedLiveset(pos.livesetId) ?: return@mapNotNull null
-            TvContinueItem(lwd, pos.position)
-        }
+        val currentClientId = deviceIdManager.clientId
+        positions
+            .filter { it.device?.clientId?.let { id -> id != currentClientId } == true }
+            .groupBy { it.device!!.clientId!! }
+            .mapNotNull { (_, group) -> group.maxByOrNull { it.updatedAt ?: "" } }
+            .sortedByDescending { it.updatedAt ?: "" }
+            .mapNotNull { pos ->
+                val lwd = editionRepository.getCachedLiveset(pos.livesetId) ?: return@mapNotNull null
+                TvContinueItem(
+                    liveset = lwd,
+                    positionSeconds = pos.position,
+                    deviceLabel = pos.device?.displayName ?: pos.device?.deviceName,
+                    deviceType = pos.device?.deviceType,
+                )
+            }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     val isLoggedIn: StateFlow<Boolean> = authRepository.isLoggedIn
@@ -139,6 +154,14 @@ private fun ContinueCardTv(item: TvContinueItem, onClick: () -> Unit) {
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.primary,
             )
+            item.deviceLabel?.let { label ->
+                Text(
+                    "on $label",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                )
+            }
         }
     }
 }

@@ -267,6 +267,7 @@ class MainActivity : FragmentActivity() {
                                             modifier = Modifier.fillMaxSize()
                                         ) {
                                             ContinueListeningSection(
+                                                isPlaying = isPlaying,
                                                 onResume = { livesetId, positionSec ->
                                                     playerViewModel.playLiveset(
                                                         CustomMediaId.from("liveset:$livesetId@$positionSec")

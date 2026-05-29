@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.stateIn
 import nl.stoux.tfw.core.common.auth.AuthRepository
 import nl.stoux.tfw.core.common.database.dao.PlaybackPositionDao
 import nl.stoux.tfw.core.common.database.entity.PlaybackPositionEntity
+import nl.stoux.tfw.core.common.device.DeviceIdManager
 import nl.stoux.tfw.core.common.network.ApiService
 import nl.stoux.tfw.core.common.network.dto.auth.PlaybackPositionDto
 import nl.stoux.tfw.core.common.network.dto.auth.SavePositionRequest
@@ -27,6 +28,7 @@ class PlaybackPositionRepository @Inject constructor(
     private val api: ApiService,
     private val authRepository: AuthRepository,
     private val positionDao: PlaybackPositionDao,
+    private val deviceIdManager: DeviceIdManager,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -37,6 +39,13 @@ class PlaybackPositionRepository @Inject constructor(
                     livesetId = entity.livesetId,
                     position = entity.positionSeconds,
                     updatedAt = entity.updatedAt,
+                    device = entity.clientId?.let {
+                        nl.stoux.tfw.core.common.network.dto.auth.PositionDeviceDto(
+                            clientId = it,
+                            deviceType = entity.deviceType,
+                            displayName = entity.deviceLabel,
+                        )
+                    },
                 )
             }
         }
@@ -53,6 +62,9 @@ class PlaybackPositionRepository @Inject constructor(
                         livesetId = it.livesetId,
                         positionSeconds = it.position,
                         updatedAt = it.updatedAt,
+                        clientId = it.device?.clientId,
+                        deviceLabel = it.device?.displayName ?: it.device?.deviceName,
+                        deviceType = it.device?.deviceType,
                     )
                 }
             )
@@ -68,6 +80,7 @@ class PlaybackPositionRepository @Inject constructor(
                 livesetId = livesetId,
                 positionSeconds = positionSeconds,
                 updatedAt = java.time.Instant.now().toString(),
+                clientId = deviceIdManager.clientId,
             )
         )
         if (!authRepository.isLoggedIn.value) return

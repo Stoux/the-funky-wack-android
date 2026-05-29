@@ -122,5 +122,18 @@ object Migrations {
         }
     }
 
-    val ALL_MIGRATIONS = arrayOf(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
+    val MIGRATION_7_8 = object : Migration(7, 8) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE playback_positions ADD COLUMN clientId TEXT DEFAULT NULL")
+        }
+    }
+
+    val MIGRATION_8_9 = object : Migration(8, 9) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE playback_positions ADD COLUMN deviceLabel TEXT DEFAULT NULL")
+            db.execSQL("ALTER TABLE playback_positions ADD COLUMN deviceType TEXT DEFAULT NULL")
+        }
+    }
+
+    val ALL_MIGRATIONS = arrayOf(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
 }

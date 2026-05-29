@@ -33,13 +33,14 @@ import nl.stoux.tfw.core.common.database.entity.artworkUrl
  */
 @Composable
 fun ContinueListeningSection(
+    isPlaying: Boolean,
     onResume: (livesetId: Long, positionSeconds: Long) -> Unit,
     viewModel: ContinueListeningViewModel = hiltViewModel(),
 ) {
     val isLoggedIn by viewModel.isLoggedIn.collectAsState()
     val items by viewModel.items.collectAsState()
 
-    if (!isLoggedIn || items.isEmpty()) return
+    if (!isLoggedIn || items.isEmpty() || isPlaying) return
 
     Column(modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp)) {
         Text(
@@ -107,6 +108,14 @@ private fun ContinueListenCard(
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.primary,
         )
+        item.deviceLabel?.let { label ->
+            Text(
+                "on $label",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+            )
+        }
     }
 }
 

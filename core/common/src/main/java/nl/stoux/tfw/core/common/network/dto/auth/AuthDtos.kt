@@ -201,6 +201,15 @@ data class PlaybackPositionDto(
     val position: Long, // in seconds
     @SerialName("device_name") val deviceName: String? = null,
     @SerialName("updated_at") val updatedAt: String? = null,
+    val device: PositionDeviceDto? = null,
+)
+
+@Serializable
+data class PositionDeviceDto(
+    @SerialName("client_id") val clientId: String? = null,
+    @SerialName("device_type") val deviceType: String? = null,
+    @SerialName("device_name") val deviceName: String? = null,
+    @SerialName("display_name") val displayName: String? = null,
 )
 
 @Serializable

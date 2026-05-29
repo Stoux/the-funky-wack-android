@@ -12,4 +12,7 @@ data class PlaybackPositionEntity(
     @PrimaryKey val livesetId: Long,
     val positionSeconds: Long,
     val updatedAt: String? = null,
+    val clientId: String? = null,
+    val deviceLabel: String? = null,
+    val deviceType: String? = null,
 )
