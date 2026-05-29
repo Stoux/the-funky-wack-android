@@ -215,7 +215,7 @@ class ListenAlongCoordinator @Inject constructor(
             val name = obj["name"]?.jsonPrimitive?.contentOrNullSafe() ?: "Listener"
             val count = obj["count"]?.jsonPrimitive?.longOrNull?.toInt() ?: 0
             scope.launch { _listenerEvents.emit(ListenerEvent.Joined(name, count)) }
-        }
+        }.onFailure { Log.w(TAG, "Failed to parse listener.joined: $data", it) }
     }
 
     private fun handleListenerLeft(event: PusherEvent?) {
@@ -224,7 +224,7 @@ class ListenAlongCoordinator @Inject constructor(
             val obj = json.parseToJsonElement(data).jsonObject
             val count = obj["count"]?.jsonPrimitive?.longOrNull?.toInt() ?: 0
             scope.launch { _listenerEvents.emit(ListenerEvent.Left(count)) }
-        }
+        }.onFailure { Log.w(TAG, "Failed to parse listener.left: $data", it) }
     }
 
     private fun emitHost(event: HostEvent) {
