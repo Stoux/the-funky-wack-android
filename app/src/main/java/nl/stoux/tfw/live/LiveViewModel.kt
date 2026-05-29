@@ -88,6 +88,7 @@ class LiveViewModel @Inject constructor(
                     sessions = sessions,
                     isLoading = false,
                 )
+                listenAlongCoordinator.setSessionCount(sessions.size)
             } catch (e: Exception) {
                 Log.e("LiveViewModel", "Failed to fetch live sessions", e)
                 _uiState.value = _uiState.value.copy(

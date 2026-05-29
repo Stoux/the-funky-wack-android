@@ -61,6 +61,7 @@ import nl.stoux.tfw.ui.theme.TheFunkyWackTheme
 import androidx.compose.ui.unit.dp
 import androidx.fragment.app.FragmentActivity
 import nl.stoux.tfw.core.common.auth.AuthRepository
+import nl.stoux.tfw.service.playback.live.ListenAlongCoordinator
 import nl.stoux.tfw.service.playback.service.MediaPlaybackService
 import nl.stoux.tfw.service.playback.service.session.CustomMediaId
 import nl.stoux.tfw.service.playback.service.queue.QueueManager
@@ -88,6 +89,7 @@ class MainActivity : FragmentActivity() {
     @Inject lateinit var queueManager: QueueManager
     @Inject lateinit var editionRepository: EditionRepository
     @Inject lateinit var authRepository: AuthRepository
+    @Inject lateinit var listenAlongCoordinator: ListenAlongCoordinator
 
     // Signal from Activity lifecycle (e.g., notification tap) to Compose to open the player
     // Using MutableSharedFlow for thread-safe event passing from Activity lifecycle to Compose
@@ -124,6 +126,7 @@ class MainActivity : FragmentActivity() {
                 val progress by playerViewModel.progress.collectAsState()
                 val isLoggedIn by authRepository.isLoggedIn.collectAsState()
                 val currentUser by authRepository.currentUser.collectAsState()
+                val liveSessionCount by listenAlongCoordinator.sessionCount.collectAsState()
 
                 val scaffoldState = rememberBottomSheetScaffoldState()
                 val drawerState = rememberDrawerState(DrawerValue.Closed)
@@ -171,7 +174,7 @@ class MainActivity : FragmentActivity() {
                             currentScreen = currentScreen,
                             isLoggedIn = isLoggedIn,
                             userName = currentUser?.name,
-                            liveSessionCount = 0, // TODO: wire up live session count
+                            liveSessionCount = liveSessionCount,
                             onScreenSelected = { screen ->
                                 currentScreen = screen
                                 scope.launch { drawerState.close() }

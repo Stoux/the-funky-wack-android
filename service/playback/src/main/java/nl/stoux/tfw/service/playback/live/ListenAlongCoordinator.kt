@@ -51,6 +51,17 @@ class ListenAlongCoordinator @Inject constructor(
     private val _activeRoom = MutableStateFlow<ActiveRoom?>(null)
     val activeRoom: StateFlow<ActiveRoom?> = _activeRoom.asStateFlow()
 
+    /**
+     * Last-known number of active listen-along sessions. Set by the Live lobby
+     * after each refresh and read by the nav drawer to show a badge count.
+     */
+    private val _sessionCount = MutableStateFlow(0)
+    val sessionCount: StateFlow<Int> = _sessionCount.asStateFlow()
+
+    fun setSessionCount(count: Int) {
+        _sessionCount.value = count
+    }
+
     data class ActiveRoom(
         val channelToken: String,
         val mode: String, // "synced" | "independent"
