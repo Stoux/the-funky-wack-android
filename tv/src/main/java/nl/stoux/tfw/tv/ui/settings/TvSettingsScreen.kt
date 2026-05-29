@@ -40,6 +40,8 @@ fun TvSettingsScreen(
     val oledSettings by viewModel.oledSettings.collectAsState()
     val audioQuality by viewModel.audioQuality.collectAsState()
     val bufferMinutes by viewModel.bufferMinutes.collectAsState()
+    val isLoggedIn by viewModel.isLoggedIn.collectAsState()
+    val listeningVisibility by viewModel.listeningVisibility.collectAsState()
 
     LazyColumn(
         modifier = Modifier
@@ -192,6 +194,31 @@ fun TvSettingsScreen(
                 isChecked = oledSettings.colorShiftEnabled,
                 onCheckedChange = { viewModel.setOledColorShiftEnabled(it) }
             )
+        }
+
+        if (isLoggedIn) {
+            item {
+                Spacer(modifier = Modifier.height(32.dp))
+                Text(
+                    text = "Account",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
+            item {
+                SettingsOptionRow(
+                    title = "Show my name on Live",
+                    options = listOf("everyone", "authenticated", "nobody"),
+                    selectedOption = listeningVisibility,
+                    onOptionSelected = { viewModel.setListeningVisibility(it) },
+                    labelTransform = { when (it) {
+                        "everyone" -> "Everyone"
+                        "authenticated" -> "Logged in"
+                        "nobody" -> "Nobody"
+                        else -> it
+                    } },
+                )
+            }
         }
 
         // Bottom padding

@@ -23,6 +23,8 @@ data class UserDto(
     val id: Long,
     val name: String,
     val email: String,
+    @SerialName("is_admin") val isAdmin: Boolean = false,
+    @SerialName("listening_visibility") val listeningVisibility: String = "everyone",
 )
 
 // --- Device Code Flow ---
@@ -273,5 +275,59 @@ data class BroadcastAuthResponse(
 
 @Serializable
 data class VisibilitySettingRequest(
-    val visibility: String, // "everyone", "authenticated", "nobody"
+    @SerialName("listening_visibility") val listeningVisibility: String, // "everyone", "authenticated", "nobody"
+)
+
+// --- Devices ---
+
+@Serializable
+data class DevicesListResponse(
+    val devices: List<DeviceDto>,
+)
+
+@Serializable
+data class DeviceDto(
+    val id: Long,
+    @SerialName("client_id") val clientId: String,
+    @SerialName("device_type") val deviceType: String? = null,
+    @SerialName("device_name") val deviceName: String? = null,
+    @SerialName("device_nickname") val deviceNickname: String? = null,
+    @SerialName("display_name") val displayName: String,
+    @SerialName("is_hidden") val isHidden: Boolean = false,
+    @SerialName("is_stale") val isStale: Boolean = false,
+    @SerialName("is_current") val isCurrent: Boolean = false,
+    @SerialName("last_seen_at") val lastSeenAt: String? = null,
+    @SerialName("created_at") val createdAt: String? = null,
+)
+
+@Serializable
+data class DeviceUpdateRequest(
+    @SerialName("device_nickname") val deviceNickname: String,
+)
+
+// --- Invite Codes ---
+
+@Serializable
+data class InvitesListResponse(
+    val invites: List<InviteDto>,
+)
+
+@Serializable
+data class InviteDto(
+    val id: Long,
+    val code: String,
+    @SerialName("used_by") val usedBy: InviteUsedByDto? = null,
+    @SerialName("used_at") val usedAt: String? = null,
+    @SerialName("created_at") val createdAt: String? = null,
+)
+
+@Serializable
+data class InviteUsedByDto(
+    val id: Long,
+    val name: String,
+)
+
+@Serializable
+data class InviteResponse(
+    val invite: InviteDto,
 )

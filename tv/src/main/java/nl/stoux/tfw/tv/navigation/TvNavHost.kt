@@ -7,6 +7,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import nl.stoux.tfw.tv.ui.auth.TvDeviceCodeScreen
 import nl.stoux.tfw.tv.ui.browse.TvBrowseScreen
+import nl.stoux.tfw.tv.ui.devices.TvDevicesScreen
 import nl.stoux.tfw.tv.ui.browse.TvEditionDetailScreen
 import nl.stoux.tfw.tv.ui.favorites.TvFavoritesScreen
 import nl.stoux.tfw.tv.ui.live.TvLiveScreen
@@ -130,6 +131,10 @@ fun TvNavHost() {
                     navController.popBackStack()
                 }
             )
+        }
+
+        composable<TvDestination.Devices> {
+            TvDevicesScreen()
         }
     }
 }

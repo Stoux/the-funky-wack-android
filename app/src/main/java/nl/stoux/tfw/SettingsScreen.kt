@@ -69,6 +69,8 @@ fun SettingsScreen(
     val offlineMode by viewModel.offlineMode.collectAsState()
     val preferDownloadedQuality by viewModel.preferDownloadedQuality.collectAsState()
     val totalDownloadedBytes by viewModel.totalDownloadedBytes.collectAsState()
+    val isLoggedIn by viewModel.isLoggedIn.collectAsState()
+    val listeningVisibility by viewModel.listeningVisibility.collectAsState()
     var showLosslessConfirmDialog by remember { mutableStateOf(false) }
 
     Column(
@@ -284,6 +286,47 @@ fun SettingsScreen(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+
+        if (isLoggedIn) {
+            Spacer(modifier = Modifier.height(32.dp))
+            Text(
+                text = "Account",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            SettingsRow(
+                title = "Show my name on Live",
+                description = "Controls whether other listeners see your name when you're hosting a session.",
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.width(180.dp)) {
+                    listOf(
+                        "everyone" to "Everyone",
+                        "authenticated" to "Logged in only",
+                        "nobody" to "Nobody",
+                    ).forEach { (value, label) ->
+                        val isSelected = value == listeningVisibility
+                        Surface(
+                            onClick = { viewModel.setListeningVisibility(value) },
+                            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Box(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text(
+                                    label,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
 
         Spacer(modifier = Modifier.height(32.dp))
 

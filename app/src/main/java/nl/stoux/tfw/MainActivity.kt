@@ -46,7 +46,9 @@ import androidx.compose.ui.graphics.Color
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 import nl.stoux.tfw.auth.LoginScreen
+import nl.stoux.tfw.devices.DevicesScreen
 import nl.stoux.tfw.favorites.FavoritesScreen
+import nl.stoux.tfw.invites.InvitesScreen
 import nl.stoux.tfw.feature.browser.EditionListScreen
 import nl.stoux.tfw.feature.browser.EditionListViewModel
 import nl.stoux.tfw.feature.player.PlayerScreen
@@ -270,6 +272,8 @@ class MainActivity : FragmentActivity() {
                                             onPlayClicked = { mediaId -> playerViewModel.playLiveset(CustomMediaId.from(mediaId)) },
                                         )
                                         AppScreen.Live -> LiveScreen()
+                                        AppScreen.Devices -> DevicesScreen()
+                                        AppScreen.Invites -> InvitesScreen()
                                         AppScreen.Settings -> SettingsScreen()
                                         AppScreen.Account -> LoginScreen()
                                     }

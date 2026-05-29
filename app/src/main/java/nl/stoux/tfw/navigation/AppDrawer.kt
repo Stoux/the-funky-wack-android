@@ -5,8 +5,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Album
+import androidx.compose.material.icons.filled.Devices
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.LiveTv
+import androidx.compose.material.icons.filled.MailOutline
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
 import androidx.compose.material.icons.filled.Settings
@@ -26,6 +28,8 @@ enum class AppScreen(val title: String, val icon: ImageVector) {
     Favorites("Favorites", Icons.Default.Favorite),
     Playlists("Playlists", Icons.AutoMirrored.Filled.PlaylistPlay),
     Live("Live", Icons.Default.LiveTv),
+    Devices("Devices", Icons.Default.Devices),
+    Invites("Invites", Icons.Default.MailOutline),
     Settings("Settings", Icons.Default.Settings),
     Account("Account", Icons.Default.Person),
 }
@@ -86,6 +90,23 @@ fun AppDrawerContent(
             onClick = { onScreenSelected(AppScreen.Live) },
             modifier = Modifier.padding(horizontal = 12.dp),
         )
+
+        if (isLoggedIn) {
+            NavigationDrawerItem(
+                icon = { Icon(AppScreen.Devices.icon, contentDescription = null) },
+                label = { Text(AppScreen.Devices.title) },
+                selected = currentScreen == AppScreen.Devices,
+                onClick = { onScreenSelected(AppScreen.Devices) },
+                modifier = Modifier.padding(horizontal = 12.dp),
+            )
+            NavigationDrawerItem(
+                icon = { Icon(AppScreen.Invites.icon, contentDescription = null) },
+                label = { Text(AppScreen.Invites.title) },
+                selected = currentScreen == AppScreen.Invites,
+                onClick = { onScreenSelected(AppScreen.Invites) },
+                modifier = Modifier.padding(horizontal = 12.dp),
+            )
+        }
 
         Spacer(modifier = Modifier.height(8.dp))
         HorizontalDivider(modifier = Modifier.padding(horizontal = 28.dp))

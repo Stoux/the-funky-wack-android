@@ -5,8 +5,11 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import nl.stoux.tfw.core.common.auth.AuthRepository
+import nl.stoux.tfw.core.common.repository.UserSettingsRepository
 import nl.stoux.tfw.service.playback.settings.PlaybackSettingsRepository
 import nl.stoux.tfw.service.playback.settings.PlaybackSettingsRepository.AudioQuality
 import nl.stoux.tfw.tv.data.TvSettingsRepository
@@ -17,7 +20,22 @@ import javax.inject.Inject
 class TvSettingsViewModel @Inject constructor(
     private val tvSettingsRepository: TvSettingsRepository,
     private val playbackSettings: PlaybackSettingsRepository,
+    private val authRepository: AuthRepository,
+    private val userSettingsRepository: UserSettingsRepository,
 ) : ViewModel() {
+
+    val isLoggedIn: StateFlow<Boolean> = authRepository.isLoggedIn
+
+    val listeningVisibility: StateFlow<String> = authRepository.currentUser
+        .map { it?.listeningVisibility ?: "everyone" }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "everyone")
+
+    fun setListeningVisibility(value: String) {
+        viewModelScope.launch {
+            userSettingsRepository.setListeningVisibility(value)
+                .onSuccess { runCatching { authRepository.fetchUser() } }
+        }
+    }
 
     val oledSettings: StateFlow<OledSettings> = tvSettingsRepository.oledSettings()
         .stateIn(

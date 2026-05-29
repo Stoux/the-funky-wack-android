@@ -29,4 +29,7 @@ sealed interface TvDestination {
 
     @Serializable
     data object Live : TvDestination
+
+    @Serializable
+    data object Devices : TvDestination
 }

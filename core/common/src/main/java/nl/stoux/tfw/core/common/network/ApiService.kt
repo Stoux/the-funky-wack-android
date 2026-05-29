@@ -8,6 +8,10 @@ import nl.stoux.tfw.core.common.network.dto.auth.BroadcastAuthResponse
 import nl.stoux.tfw.core.common.network.dto.auth.CreatePlaylistRequest
 import nl.stoux.tfw.core.common.network.dto.auth.DetachResponse
 import nl.stoux.tfw.core.common.network.dto.auth.DeviceCodePollResponse
+import nl.stoux.tfw.core.common.network.dto.auth.DeviceUpdateRequest
+import nl.stoux.tfw.core.common.network.dto.auth.DevicesListResponse
+import nl.stoux.tfw.core.common.network.dto.auth.InviteResponse
+import nl.stoux.tfw.core.common.network.dto.auth.InvitesListResponse
 import nl.stoux.tfw.core.common.network.dto.auth.DeviceCodeRequest
 import nl.stoux.tfw.core.common.network.dto.auth.DeviceCodeResponse
 import nl.stoux.tfw.core.common.network.dto.auth.FavoriteResponse
@@ -169,4 +173,32 @@ interface ApiService {
 
     @PUT("settings/visibility")
     suspend fun updateVisibility(@Body request: VisibilitySettingRequest)
+
+    // --- Devices ---
+
+    @GET("devices")
+    suspend fun getDevices(): DevicesListResponse
+
+    @PUT("devices/{id}")
+    suspend fun updateDevice(
+        @Path("id") id: Long,
+        @Body request: DeviceUpdateRequest,
+    )
+
+    @PUT("devices/{id}/hide")
+    suspend fun hideDevice(@Path("id") id: Long)
+
+    @PUT("devices/{id}/show")
+    suspend fun showDevice(@Path("id") id: Long)
+
+    @DELETE("devices/{id}")
+    suspend fun deleteDevice(@Path("id") id: Long)
+
+    // --- Invite Codes ---
+
+    @GET("invites")
+    suspend fun getInvites(): InvitesListResponse
+
+    @POST("invites")
+    suspend fun createInvite(): InviteResponse
 }
