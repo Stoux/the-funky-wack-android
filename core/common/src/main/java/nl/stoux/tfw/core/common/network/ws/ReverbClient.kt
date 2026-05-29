@@ -50,8 +50,49 @@ class ReverbClient @Inject constructor(
 
     @Volatile private var pusher: Pusher? = null
 
+    /**
+     * Ref-counted consumers — each [acquire] must be matched by exactly one
+     * [release]. The underlying Pusher connection opens on the first acquire
+     * and closes when the last consumer releases. Guards against one consumer
+     * tearing down the socket out from under another (e.g. the service
+     * stopping while the lobby's presence-live is still subscribed).
+     */
+    private var refCount = 0
+
+    /**
+     * Acquire a hold on the connection. Opens the socket on the first hold,
+     * no-ops on subsequent acquires. Pair with [release].
+     */
     @Synchronized
-    fun connect() {
+    fun acquire() {
+        refCount += 1
+        if (refCount > 1) return
+        openConnection()
+    }
+
+    /**
+     * Release a previously-acquired hold. Tears down the socket when the
+     * last consumer releases. Calling without a matching [acquire] is a no-op.
+     */
+    @Synchronized
+    fun release() {
+        if (refCount == 0) return
+        refCount -= 1
+        if (refCount > 0) return
+        closeConnection()
+    }
+
+    /**
+     * Force the socket down regardless of refcount. Only call from the service
+     * teardown — anything still holding a ref is about to die with the process.
+     */
+    @Synchronized
+    fun forceDisconnect() {
+        refCount = 0
+        closeConnection()
+    }
+
+    private fun openConnection() {
         if (pusher != null) return
         if (!ReverbConfig.isConfigured) {
             Log.w("ReverbClient", "Reverb not configured (missing REVERB_APP_KEY or REVERB_HOST in secrets). Skipping connect.")
@@ -71,8 +112,7 @@ class ReverbClient @Inject constructor(
         }
     }
 
-    @Synchronized
-    fun disconnect() {
+    private fun closeConnection() {
         pusher?.disconnect()
         pusher = null
         _state.value = ReverbConnectionState.DISCONNECTED

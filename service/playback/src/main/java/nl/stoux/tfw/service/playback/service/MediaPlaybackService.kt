@@ -210,7 +210,7 @@ class MediaPlaybackService : MediaLibraryService() {
                 kotlinx.coroutines.withTimeoutOrNull(2000) { listenAlongCoordinator.leave() }
             }
         }
-        reverbClient.disconnect()
+        reverbClient.forceDisconnect()
 
         // Detach coordinator before releasing player (fire-and-forget, best-effort save)
         serviceIOScope.launch {

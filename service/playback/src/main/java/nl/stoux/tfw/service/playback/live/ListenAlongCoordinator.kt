@@ -82,7 +82,7 @@ class ListenAlongCoordinator @Inject constructor(
         Log.d(TAG, "Joined room=$channelToken mode=${response.mode} member=${response.memberId}")
 
         if (response.mode == "synced") {
-            reverbClient.connect()
+            reverbClient.acquire()
             subscribeToRoom(channelToken)
         }
 
@@ -97,6 +97,9 @@ class ListenAlongCoordinator @Inject constructor(
         runCatching { api.leaveLiveSession(current.channelToken) }
             .onFailure { Log.w(TAG, "leave HTTP failed", it) }
         reverbClient.unsubscribe(channelName(current.channelToken))
+        if (current.mode == "synced") {
+            reverbClient.release()
+        }
         _activeRoom.value = null
     }
 
@@ -271,7 +274,7 @@ class ListenAlongCoordinator @Inject constructor(
             presenceLiveSubscribers += 1
             if (presenceLiveSubscribers > 1) return // already bound, just bump refcount
         }
-        reverbClient.connect()
+        reverbClient.acquire()
         val name = "presence-live"
         val channel = reverbClient.subscribePresence(name, presenceListener) ?: run {
             Log.w(TAG, "Failed to subscribe to $name")
@@ -283,11 +286,13 @@ class ListenAlongCoordinator @Inject constructor(
     }
 
     fun unsubscribePresenceLive() {
-        synchronized(presenceLiveLock) {
+        val shouldRelease = synchronized(presenceLiveLock) {
             presenceLiveSubscribers = (presenceLiveSubscribers - 1).coerceAtLeast(0)
-            if (presenceLiveSubscribers > 0) return // still active subscribers
+            presenceLiveSubscribers == 0
         }
+        if (!shouldRelease) return
         reverbClient.unsubscribe("presence-live")
+        reverbClient.release()
     }
 
     private fun kotlinx.serialization.json.JsonPrimitive.contentOrNullSafe(): String? =
