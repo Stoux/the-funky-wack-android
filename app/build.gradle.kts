@@ -39,10 +39,8 @@ android {
 
     buildTypes {
         debug {
-            val secrets = loadSecrets(isProd = false)
-            manifestPlaceholders["SENTRY_DSN"] = secrets.getProperty("SENTRY_DSN")
-                ?: System.getenv("SENTRY_DSN")
-                ?: ""
+            // Sentry disabled in debug builds — empty DSN prevents init, no events sent.
+            manifestPlaceholders["SENTRY_DSN"] = ""
             manifestPlaceholders["SENTRY_ENVIRONMENT"] = "debug"
         }
         release {

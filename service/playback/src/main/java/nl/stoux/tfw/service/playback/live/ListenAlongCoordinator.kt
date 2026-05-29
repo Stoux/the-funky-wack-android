@@ -1,6 +1,7 @@
 package nl.stoux.tfw.service.playback.live
 
 import android.util.Log
+import com.pusher.client.channel.PresenceChannel
 import com.pusher.client.channel.PresenceChannelEventListener
 import com.pusher.client.channel.PusherEvent
 import com.pusher.client.channel.User
@@ -142,15 +143,26 @@ class ListenAlongCoordinator @Inject constructor(
             Log.w(TAG, "Failed to subscribe to $name — Pusher not connected")
             return
         }
-        // Host action events (received by listeners)
-        channel.bind("host.seek") { event -> handleHostEvent(event, ::parseSeek) }
-        channel.bind("host.pause") { event -> handleHostEvent(event, ::parsePause) }
-        channel.bind("host.resume") { event -> handleHostEvent(event, ::parseResume) }
-        channel.bind("host.track-change") { event -> handleHostEvent(event, ::parseTrackChange) }
-        channel.bind("host.stop") { _ -> emitHost(HostEvent.Stop) }
-        // Listener join/leave events (received by host)
-        channel.bind("listener.joined") { event -> handleListenerJoined(event) }
-        channel.bind("listener.left") { event -> handleListenerLeft(event) }
+        // Pusher requires presence-channel bindings to be PresenceChannelEventListener
+        // instances — a bare lambda would coerce to SubscriptionEventListener and crash.
+        channel.bindPresence("host.seek") { event -> handleHostEvent(event, ::parseSeek) }
+        channel.bindPresence("host.pause") { event -> handleHostEvent(event, ::parsePause) }
+        channel.bindPresence("host.resume") { event -> handleHostEvent(event, ::parseResume) }
+        channel.bindPresence("host.track-change") { event -> handleHostEvent(event, ::parseTrackChange) }
+        channel.bindPresence("host.stop") { _ -> emitHost(HostEvent.Stop) }
+        channel.bindPresence("listener.joined") { event -> handleListenerJoined(event) }
+        channel.bindPresence("listener.left") { event -> handleListenerLeft(event) }
+    }
+
+    private fun PresenceChannel.bindPresence(eventName: String, onEvent: (PusherEvent?) -> Unit) {
+        bind(eventName, object : PresenceChannelEventListener {
+            override fun onEvent(event: PusherEvent?) = onEvent(event)
+            override fun onUsersInformationReceived(channelName: String?, users: MutableSet<User>?) {}
+            override fun userSubscribed(channelName: String?, user: User?) {}
+            override fun userUnsubscribed(channelName: String?, user: User?) {}
+            override fun onAuthenticationFailure(message: String?, e: Exception?) {}
+            override fun onSubscriptionSucceeded(channelName: String?) {}
+        })
     }
 
     private fun handleHostEvent(event: PusherEvent?, parse: (String) -> HostEvent?) {
@@ -247,7 +259,7 @@ class ListenAlongCoordinator @Inject constructor(
             Log.w(TAG, "Failed to subscribe to $name")
             return
         }
-        channel.bind("sessions.updated") { _ ->
+        channel.bindPresence("sessions.updated") { _ ->
             scope.launch { _sessionsUpdated.emit(Unit) }
         }
     }

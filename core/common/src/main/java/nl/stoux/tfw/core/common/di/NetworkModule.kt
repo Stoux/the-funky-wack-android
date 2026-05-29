@@ -45,10 +45,13 @@ object NetworkModule {
             context.packageManager.getPackageInfo(context.packageName, 0).versionName
         }.getOrNull() ?: "unknown"
 
-        // Device interceptor: adds X-Client-ID and custom User-Agent
+        // Device interceptor: adds X-Client-ID, custom User-Agent, and Accept: application/json.
+        // Without an explicit Accept, Laravel returns HTML error pages instead of JSON, which
+        // crashes the kotlinx-serialization converter on the first error.
         val deviceInterceptor = Interceptor { chain ->
             val request = chain.request().newBuilder()
                 .header("X-Client-ID", deviceIdManager.clientId)
+                .header("Accept", "application/json")
                 .header(
                     "User-Agent",
                     "TheFunkyWack-Android/$versionName (${Build.MODEL}; Android ${Build.VERSION.SDK_INT})"
