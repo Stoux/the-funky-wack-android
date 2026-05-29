@@ -160,8 +160,10 @@ class MainActivity : FragmentActivity() {
                     scope.launch { drawerState.close() }
                 }
 
-                // Handle back on non-Browse screens: go back to Browse
-                BackHandler(enabled = currentScreen != AppScreen.Browse) {
+                // Handle back on non-Browse screens: go back to Browse. Player
+                // and drawer take priority — back should close the player sheet
+                // first, then close the drawer, before changing screen.
+                BackHandler(enabled = currentScreen != AppScreen.Browse && !playerIsOpen && !drawerState.isOpen) {
                     currentScreen = AppScreen.Browse
                 }
 
