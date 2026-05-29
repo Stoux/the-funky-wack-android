@@ -99,6 +99,15 @@ class TvBrowseViewModel @Inject constructor(
         )
     }
 
+    /** Resume a liveset at a cross-device saved position. */
+    fun resumeLiveset(livesetId: Long, positionSeconds: Long) {
+        queueManager.setContextFromLiveset(
+            livesetId = livesetId,
+            startPositionMs = positionSeconds * 1000,
+            autoplay = true,
+        )
+    }
+
     fun resumePlayback() {
         val state = _resumeState.value ?: return
         queueManager.setContextFromLiveset(

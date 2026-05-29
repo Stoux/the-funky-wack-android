@@ -137,6 +137,16 @@ fun TvBrowseScreen(
                     }
                 }
 
+                // Cross-device "Continue listening" row (only renders when logged in + has positions)
+                item {
+                    TvContinueListeningRow(
+                        onResume = { livesetId, positionSec ->
+                            viewModel.resumeLiveset(livesetId, positionSec)
+                            onNowPlayingClick()
+                        },
+                    )
+                }
+
                 // Edition rows with poster + liveset list
                 items(
                     items = editions,
