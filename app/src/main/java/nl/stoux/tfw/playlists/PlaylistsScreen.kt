@@ -53,6 +53,7 @@ fun PlaylistsScreen(
     if (selectedPlaylist != null) {
         PlaylistDetailContent(
             playlist = selectedPlaylist,
+            resolveLiveset = { id -> viewModel.resolveLiveset(id) },
             onBack = { viewModel.clearSelection() },
             onPlayItem = { livesetId ->
                 viewModel.playFromPlaylist(selectedPlaylist.shareCode, livesetId)
@@ -139,6 +140,7 @@ private fun PlaylistRow(
 @Composable
 private fun PlaylistDetailContent(
     playlist: PlaylistDto,
+    resolveLiveset: (Long) -> nl.stoux.tfw.core.common.database.dao.LivesetWithDetails?,
     onBack: () -> Unit,
     onPlayItem: (Long) -> Unit,
 ) {
@@ -169,33 +171,34 @@ private fun PlaylistDetailContent(
                 Text("No items in this playlist.", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         } else {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 items(items, key = { it.id }) { item ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onPlayItem(item.livesetId) }
-                            .padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            "${item.position + 1}.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    val lwd = resolveLiveset(item.livesetId)
+                    if (lwd != null) {
+                        nl.stoux.tfw.shared.LivesetListItem(
+                            lwd = lwd,
+                            onPlay = { onPlayItem(item.livesetId) },
                         )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column {
-                            Text(
-                                item.liveset?.title ?: "Liveset #${item.livesetId}",
-                                style = MaterialTheme.typography.bodyLarge,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                            Text(
-                                item.liveset?.artistName ?: "",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
+                    } else {
+                        // Cached liveset not available — show a minimal fallback row
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onPlayItem(item.livesetId) }
+                                .padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column {
+                                Text(
+                                    item.liveset?.title ?: "Liveset #${item.livesetId}",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                )
+                                Text(
+                                    item.liveset?.artistName ?: "",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
                         }
                     }
                 }

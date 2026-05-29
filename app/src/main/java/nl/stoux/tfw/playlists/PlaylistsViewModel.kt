@@ -8,7 +8,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import nl.stoux.tfw.core.common.auth.AuthRepository
+import nl.stoux.tfw.core.common.database.dao.LivesetWithDetails
 import nl.stoux.tfw.core.common.network.dto.auth.PlaylistDto
+import nl.stoux.tfw.core.common.repository.EditionRepository
 import nl.stoux.tfw.core.common.repository.PlaylistRepository
 import nl.stoux.tfw.service.playback.service.queue.QueueManager
 import javax.inject.Inject
@@ -23,8 +25,13 @@ data class PlaylistsUiState(
 class PlaylistsViewModel @Inject constructor(
     private val playlistRepository: PlaylistRepository,
     private val queueManager: QueueManager,
+    private val editionRepository: EditionRepository,
     authRepository: AuthRepository,
 ) : ViewModel() {
+
+    /** Look up a cached liveset by id (used by the detail row to resolve items). */
+    fun resolveLiveset(livesetId: Long): LivesetWithDetails? =
+        editionRepository.getCachedLiveset(livesetId)
 
     val isLoggedIn: StateFlow<Boolean> = authRepository.isLoggedIn
     val playlists: StateFlow<List<PlaylistDto>> = playlistRepository.playlists
