@@ -32,9 +32,13 @@ import nl.stoux.tfw.service.playback.service.manager.UnbindCallback
 import nl.stoux.tfw.service.playback.service.manager.LivesetTrackManager
 import nl.stoux.tfw.service.playback.download.DownloadRepository
 import nl.stoux.tfw.service.playback.download.DownloadStatus
+import nl.stoux.tfw.service.playback.live.HostEvent
+import nl.stoux.tfw.service.playback.live.ListenAlongCoordinator
 import nl.stoux.tfw.service.playback.player.PlayerManager
 import nl.stoux.tfw.service.playback.settings.PlaybackSettingsRepository
 import nl.stoux.tfw.service.playback.settings.PlaybackSettingsRepository.AudioQuality
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.map
@@ -49,7 +53,30 @@ class PlayerViewModel @Inject constructor(
     private val playbackSettings: PlaybackSettingsRepository,
     private val downloadRepository: DownloadRepository,
     private val playerManager: PlayerManager,
+    private val listenAlongCoordinator: ListenAlongCoordinator,
 ) : ViewModel() {
+
+    init {
+        // Mirror host actions when the user is in a synced listen-along room
+        viewModelScope.launch {
+            listenAlongCoordinator.hostEvents.collect { event ->
+                withContext(Dispatchers.Main) { handleHostEvent(event) }
+            }
+        }
+    }
+
+    private fun handleHostEvent(event: HostEvent) {
+        val c = controller ?: return
+        when (event) {
+            is HostEvent.Seek -> c.seekTo(event.position * 1000)
+            is HostEvent.Pause -> c.pause()
+            is HostEvent.Resume -> c.play()
+            is HostEvent.TrackChange -> playLiveset(
+                CustomMediaId.from("liveset:${event.livesetId}@${event.position}")
+            )
+            HostEvent.Stop -> { /* host ended; keep listener's playback as-is */ }
+        }
+    }
 
     private var controller: MediaController? = null
 

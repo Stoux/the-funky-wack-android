@@ -56,6 +56,12 @@ dependencies {
     // DataStore for persisting playback state
     implementation(libs.androidx.datastore.preferences)
 
+    // Pusher (for the listen-along coordinator wrapping ReverbClient)
+    implementation(libs.pusher.java.client)
+
+    // Kotlinx Serialization JSON (parsing Pusher event payloads)
+    implementation(libs.serialization.json)
+
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

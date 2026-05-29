@@ -6,6 +6,7 @@ import nl.stoux.tfw.core.common.network.dto.auth.AuthResponse
 import nl.stoux.tfw.core.common.network.dto.auth.BroadcastAuthRequest
 import nl.stoux.tfw.core.common.network.dto.auth.BroadcastAuthResponse
 import nl.stoux.tfw.core.common.network.dto.auth.CreatePlaylistRequest
+import nl.stoux.tfw.core.common.network.dto.auth.DetachResponse
 import nl.stoux.tfw.core.common.network.dto.auth.DeviceCodePollResponse
 import nl.stoux.tfw.core.common.network.dto.auth.DeviceCodeRequest
 import nl.stoux.tfw.core.common.network.dto.auth.DeviceCodeResponse
@@ -13,8 +14,10 @@ import nl.stoux.tfw.core.common.network.dto.auth.FavoriteResponse
 import nl.stoux.tfw.core.common.network.dto.auth.FavoritesListResponse
 import nl.stoux.tfw.core.common.network.dto.auth.JoinSessionRequest
 import nl.stoux.tfw.core.common.network.dto.auth.JoinSessionResponse
+import nl.stoux.tfw.core.common.network.dto.auth.LiveSessionDto
 import nl.stoux.tfw.core.common.network.dto.auth.LiveSessionsListResponse
 import nl.stoux.tfw.core.common.network.dto.auth.LoginRequest
+import nl.stoux.tfw.core.common.network.dto.auth.PlaybackEventRequest
 import nl.stoux.tfw.core.common.network.dto.auth.PlaybackPositionsListResponse
 import nl.stoux.tfw.core.common.network.dto.auth.PlaybackStartRequest
 import nl.stoux.tfw.core.common.network.dto.auth.PlaybackStartResponse
@@ -64,6 +67,9 @@ interface ApiService {
 
     @POST("playback/track")
     suspend fun startPlaybackSession(@Body request: PlaybackStartRequest): PlaybackStartResponse
+
+    @POST("playback/track")
+    suspend fun trackPlaybackEvent(@Body request: PlaybackEventRequest)
 
     // --- Favorites ---
 
@@ -141,6 +147,18 @@ interface ApiService {
 
     @POST("live/rooms/{token}/leave")
     suspend fun leaveLiveSession(@Path("token") token: String)
+
+    @GET("live/rooms/{token}/state")
+    suspend fun getLiveRoomState(@Path("token") token: String): LiveSessionDto
+
+    @POST("live/rooms/{token}/detach")
+    suspend fun detachLiveSession(@Path("token") token: String): DetachResponse
+
+    @POST("live/rooms/{token}/pause-sync")
+    suspend fun pauseSync(@Path("token") token: String)
+
+    @POST("live/rooms/{token}/resume-sync")
+    suspend fun resumeSync(@Path("token") token: String)
 
     // --- Broadcast Auth (for Pusher) ---
 

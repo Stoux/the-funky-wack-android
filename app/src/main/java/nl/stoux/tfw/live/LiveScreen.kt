@@ -10,9 +10,13 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -29,6 +33,7 @@ fun LiveScreen(
     viewModel: LiveViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val activeRoom by viewModel.activeRoom.collectAsState()
 
     when {
         uiState.isLoading && uiState.sessions.isEmpty() -> {
@@ -78,7 +83,13 @@ fun LiveScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 items(uiState.sessions, key = { it.channelToken }) { session ->
-                    LiveSessionCard(session)
+                    LiveSessionCard(
+                        session = session,
+                        isActive = activeRoom?.channelToken == session.channelToken,
+                        onJoinSync = { viewModel.joinSync(session.channelToken) },
+                        onJoinIndependent = { viewModel.joinIndependent(session.channelToken) },
+                        onLeave = { viewModel.leave() },
+                    )
                 }
             }
         }
@@ -86,7 +97,13 @@ fun LiveScreen(
 }
 
 @Composable
-private fun LiveSessionCard(session: LiveSessionDto) {
+private fun LiveSessionCard(
+    session: LiveSessionDto,
+    isActive: Boolean,
+    onJoinSync: () -> Unit,
+    onJoinIndependent: () -> Unit,
+    onLeave: () -> Unit,
+) {
     Card(
         modifier = Modifier.fillMaxWidth(),
     ) {
@@ -106,6 +123,28 @@ private fun LiveSessionCard(session: LiveSessionDto) {
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            if (isActive) {
+                Row {
+                    Text(
+                        "Listening along",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.weight(1f),
+                    )
+                    TextButton(onClick = onLeave) { Text("Leave") }
+                }
+            } else {
+                Row {
+                    Button(onClick = onJoinSync, modifier = Modifier.weight(1f)) {
+                        Text("Listen along")
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    OutlinedButton(onClick = onJoinIndependent) {
+                        Text("Solo")
+                    }
+                }
             }
         }
     }

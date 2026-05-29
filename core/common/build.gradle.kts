@@ -54,6 +54,9 @@ dependencies {
     // Encrypted SharedPreferences (for auth tokens and device ID)
     implementation(libs.androidx.security.crypto)
 
+    // Pusher Java client (talks to Laravel Reverb for listen-along)
+    implementation(libs.pusher.java.client)
+
     // Hilt DI
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)

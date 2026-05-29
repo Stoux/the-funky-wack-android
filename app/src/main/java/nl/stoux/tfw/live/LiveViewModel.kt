@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import nl.stoux.tfw.core.common.network.ApiService
 import nl.stoux.tfw.core.common.network.dto.auth.LiveSessionDto
+import nl.stoux.tfw.service.playback.live.ListenAlongCoordinator
 import javax.inject.Inject
 
 data class LiveUiState(
@@ -21,13 +22,59 @@ data class LiveUiState(
 @HiltViewModel
 class LiveViewModel @Inject constructor(
     private val api: ApiService,
+    private val listenAlongCoordinator: ListenAlongCoordinator,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(LiveUiState())
     val uiState: StateFlow<LiveUiState> = _uiState.asStateFlow()
 
+    val activeRoom: StateFlow<ListenAlongCoordinator.ActiveRoom?> = listenAlongCoordinator.activeRoom
+
     init {
         refresh()
+        listenAlongCoordinator.subscribePresenceLive()
+        viewModelScope.launch {
+            listenAlongCoordinator.sessionsUpdated.collect { refresh() }
+        }
+    }
+
+    override fun onCleared() {
+        listenAlongCoordinator.unsubscribePresenceLive()
+        super.onCleared()
+    }
+
+    fun joinSync(channelToken: String) {
+        viewModelScope.launch {
+            listenAlongCoordinator.join(channelToken, mode = "synced")
+                .onFailure { Log.w("LiveViewModel", "Failed to join $channelToken", it) }
+        }
+    }
+
+    fun joinIndependent(channelToken: String) {
+        viewModelScope.launch {
+            listenAlongCoordinator.join(channelToken, mode = "independent")
+                .onFailure { Log.w("LiveViewModel", "Failed to join $channelToken", it) }
+        }
+    }
+
+    fun leave() {
+        viewModelScope.launch { listenAlongCoordinator.leave() }
+    }
+
+    fun pauseSync() {
+        viewModelScope.launch { listenAlongCoordinator.pauseSync() }
+    }
+
+    fun resumeSync() {
+        viewModelScope.launch {
+            listenAlongCoordinator.resumeSync()
+            // Host may have moved tracks while we were paused — pull fresh state
+            listenAlongCoordinator.fetchState()
+        }
+    }
+
+    fun detach() {
+        viewModelScope.launch { listenAlongCoordinator.detach() }
     }
 
     fun refresh() {

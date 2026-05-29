@@ -62,6 +62,20 @@ data class PlaybackStartResponse(
     @SerialName("session_channel") val sessionChannel: String? = null,
 )
 
+/**
+ * Generic event body for all non-start playback events sent to /api/playback/track.
+ * Fields are nullable because each event uses a different subset — see API §3.
+ */
+@Serializable
+data class PlaybackEventRequest(
+    val event: String,
+    @SerialName("play_history_id") val playHistoryId: Long,
+    val position: Long? = null,
+    @SerialName("from_position") val fromPosition: Long? = null,
+    @SerialName("duration_listened") val durationListened: Long? = null,
+    val quality: String? = null,
+)
+
 // --- Favorites ---
 
 @Serializable
@@ -233,6 +247,12 @@ data class JoinSessionRequest(
 data class JoinSessionResponse(
     @SerialName("member_id") val memberId: Long,
     val mode: String,
+)
+
+@Serializable
+data class DetachResponse(
+    val message: String,
+    @SerialName("new_room_token") val newRoomToken: String? = null,
 )
 
 // --- Broadcast Auth ---

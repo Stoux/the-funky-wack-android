@@ -11,17 +11,19 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import nl.stoux.tfw.core.common.auth.AuthRepository
 import nl.stoux.tfw.core.common.network.ApiService
+import nl.stoux.tfw.core.common.network.dto.auth.PlaybackEventRequest
 import nl.stoux.tfw.core.common.network.dto.auth.PlaybackStartRequest
 import nl.stoux.tfw.service.playback.service.session.CustomMediaId
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Tracks playback events and reports them to the server.
- * Hooks into Media3 player events as a Player.Listener.
+ * Reports playback events to the backend so plays, seek history, and
+ * "continue listening" positions get attributed to the right user/device.
  *
- * Currently uses HTTP for session start. WebSocket whispers for progress/seek/pause/resume/stop
- * will be added when Pusher SDK is integrated.
+ * Per the API reference, the Android app uses the HTTP `/api/playback/track`
+ * endpoint for every event (start/progress/seek/pause/resume/stop/quality).
+ * WebSocket whispers are a web-only path.
  */
 @Singleton
 class PlaybackTracker @Inject constructor(
@@ -30,35 +32,63 @@ class PlaybackTracker @Inject constructor(
 ) {
     private val scope = CoroutineScope(Dispatchers.IO)
     private var listener: Player.Listener? = null
+    private var attachedPlayer: Player? = null
     private var currentSessionId: Long? = null
     private var currentLivesetId: Long? = null
     private var progressJob: Job? = null
+    private var listenedSecondsAccumulator = 0L
+    private var lastPlayingPositionSec: Long = 0L
 
     fun attach(player: Player) {
+        attachedPlayer = player
         val trackingListener = object : Player.Listener {
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                 val livesetId = mediaItem?.mediaId?.let { CustomMediaId.from(it).getLivesetId() }
                 if (livesetId != null && livesetId != currentLivesetId) {
-                    // Stop tracking old, start tracking new
-                    stopTracking()
+                    stopTracking(player)
                     startTracking(livesetId, player)
                 } else if (livesetId == null) {
-                    stopTracking()
+                    stopTracking(player)
                 }
             }
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
-                if (isPlaying && currentLivesetId != null && currentSessionId == null) {
-                    // Resumed or started playing — ensure we have a session
-                    val id = player.currentMediaItem?.mediaId?.let { CustomMediaId.from(it).getLivesetId() }
-                    if (id != null) startTracking(id, player)
-                }
-                // Start/stop periodic progress reporting
                 if (isPlaying) {
+                    val livesetId = player.currentMediaItem?.mediaId?.let { CustomMediaId.from(it).getLivesetId() }
+                    if (livesetId != null && currentSessionId == null) {
+                        startTracking(livesetId, player)
+                    } else {
+                        sendEvent("resume", player)
+                    }
                     startProgressReporting(player)
                 } else {
                     progressJob?.cancel()
                     progressJob = null
+                    sendEvent("pause", player)
+                }
+            }
+
+            override fun onPositionDiscontinuity(
+                oldPosition: Player.PositionInfo,
+                newPosition: Player.PositionInfo,
+                reason: Int,
+            ) {
+                if (reason == Player.DISCONTINUITY_REASON_SEEK) {
+                    val sessionId = currentSessionId ?: return
+                    val fromSec = oldPosition.positionMs / 1000
+                    val toSec = newPosition.positionMs / 1000
+                    scope.launch {
+                        runCatching {
+                            api.trackPlaybackEvent(
+                                PlaybackEventRequest(
+                                    event = "seek",
+                                    playHistoryId = sessionId,
+                                    position = toSec,
+                                    fromPosition = fromSec,
+                                )
+                            )
+                        }.onFailure { Log.w(TAG, "seek event failed", it) }
+                    }
                 }
             }
         }
@@ -68,63 +98,95 @@ class PlaybackTracker @Inject constructor(
     }
 
     fun detach(player: Player) {
-        // Send final stop event
-        scope.launch {
-            val position = withContext(Dispatchers.Main) { player.currentPosition }
-            Log.d("PlaybackTracker", "Final stop at ${position / 1000}s (session: $currentSessionId)")
-            // TODO: Send stop whisper via WebSocket when Pusher SDK is integrated
-        }
+        sendEvent("stop", player)
         listener?.let { player.removeListener(it) }
         listener = null
-        stopTracking()
+        attachedPlayer = null
+        stopTracking(player)
     }
 
     private fun startTracking(livesetId: Long, player: Player) {
         if (!authRepository.isLoggedIn.value) return
         currentLivesetId = livesetId
+        listenedSecondsAccumulator = 0L
 
         scope.launch {
             try {
                 val position = withContext(Dispatchers.Main) { player.currentPosition }
+                lastPlayingPositionSec = position / 1000
                 val response = api.startPlaybackSession(
                     PlaybackStartRequest(
                         livesetId = livesetId,
                         event = "start",
-                        position = position / 1000,
+                        position = lastPlayingPositionSec,
                     )
                 )
                 currentSessionId = response.playHistoryId
-                Log.d("PlaybackTracker", "Started session ${response.playHistoryId} for liveset $livesetId")
-                // TODO: Join presence channel via Pusher when SDK is integrated
-                // response.sessionChannel can be used for WebSocket whispers
+                Log.d(TAG, "Started session ${response.playHistoryId} for liveset $livesetId")
             } catch (e: Exception) {
-                Log.w("PlaybackTracker", "Failed to start playback session", e)
+                Log.w(TAG, "Failed to start playback session", e)
             }
         }
     }
 
-    private fun stopTracking() {
+    private fun stopTracking(player: Player) {
         progressJob?.cancel()
         progressJob = null
         currentSessionId = null
         currentLivesetId = null
-        // TODO: Send stop whisper via WebSocket when Pusher SDK is integrated
+        listenedSecondsAccumulator = 0L
     }
 
     private fun startProgressReporting(player: Player) {
         progressJob?.cancel()
         progressJob = scope.launch {
             while (true) {
-                delay(15_000) // Report every 15 seconds
-                // TODO: Send progress whisper via WebSocket when Pusher SDK is integrated
-                // For now, this is a no-op placeholder
-                val position = withContext(Dispatchers.Main) { player.currentPosition }
-                Log.d("PlaybackTracker", "Progress: ${position / 1000}s (session: $currentSessionId)")
+                delay(15_000)
+                val sessionId = currentSessionId ?: continue
+                val positionSec = withContext(Dispatchers.Main) { player.currentPosition / 1000 }
+                listenedSecondsAccumulator += 15
+                runCatching {
+                    api.trackPlaybackEvent(
+                        PlaybackEventRequest(
+                            event = "progress",
+                            playHistoryId = sessionId,
+                            position = positionSec,
+                            durationListened = listenedSecondsAccumulator,
+                        )
+                    )
+                }.onFailure { Log.w(TAG, "progress event failed", it) }
             }
         }
     }
 
+    private fun sendEvent(event: String, player: Player) {
+        val sessionId = currentSessionId ?: return
+        scope.launch {
+            val positionSec = withContext(Dispatchers.Main) { player.currentPosition / 1000 }
+            runCatching {
+                api.trackPlaybackEvent(
+                    PlaybackEventRequest(
+                        event = event,
+                        playHistoryId = sessionId,
+                        position = positionSec,
+                        durationListened = if (event == "stop") listenedSecondsAccumulator else null,
+                    )
+                )
+            }.onFailure { Log.w(TAG, "$event event failed", it) }
+        }
+    }
+
     fun release() {
-        stopTracking()
+        // Best-effort final stop event if we're still mid-session
+        attachedPlayer?.let { sendEvent("stop", it) }
+        progressJob?.cancel()
+        progressJob = null
+        currentSessionId = null
+        currentLivesetId = null
+        attachedPlayer = null
+    }
+
+    companion object {
+        private const val TAG = "PlaybackTracker"
     }
 }
