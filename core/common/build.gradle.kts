@@ -51,6 +51,9 @@ dependencies {
     implementation(libs.okhttp)
     implementation(libs.okhttp.logging)
 
+    // Encrypted SharedPreferences (for auth tokens and device ID)
+    implementation(libs.androidx.security.crypto)
+
     // Hilt DI
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)

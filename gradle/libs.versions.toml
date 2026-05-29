@@ -39,6 +39,7 @@ playAppUpdate = "2.1.0"
 sentry = "8.33.0"
 sentryPlugin = "6.1.0"
 sentryComposeAndroid = "8.33.0"
+securityCrypto = "1.1.0-alpha06"
 # Plugins
 ksp = "2.2.20-2.0.3"
 media = "1.6.0"
@@ -100,6 +101,8 @@ androidx-tv-foundation = { group = "androidx.tv", name = "tv-foundation", versio
 androidx-tv-material = { group = "androidx.tv", name = "tv-material", version.ref = "tvMaterial" }
 # Sentry
 sentry-compose-android = { group = "io.sentry", name = "sentry-compose-android", version.ref = "sentryComposeAndroid" }
+# Security
+androidx-security-crypto = { group = "androidx.security", name = "security-crypto", version.ref = "securityCrypto" }
 # Play In-App Update
 play-app-update = { group = "com.google.android.play", name = "app-update", version.ref = "playAppUpdate" }
 play-app-update-ktx = { group = "com.google.android.play", name = "app-update-ktx", version.ref = "playAppUpdate" }

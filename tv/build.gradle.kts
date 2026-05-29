@@ -77,6 +77,9 @@ dependencies {
     // Media3 controller
     implementation(libs.media3.session)
 
+    // Retrofit (for HttpException in error handling)
+    implementation(libs.retrofit)
+
     // Coroutines
     implementation(libs.coroutines.android)
 
