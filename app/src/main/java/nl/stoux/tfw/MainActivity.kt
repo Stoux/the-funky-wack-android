@@ -57,6 +57,7 @@ import nl.stoux.tfw.feature.player.PlayerViewModel
 import nl.stoux.tfw.live.LiveScreen
 import nl.stoux.tfw.navigation.AppDrawerContent
 import nl.stoux.tfw.navigation.AppScreen
+import nl.stoux.tfw.playlists.AddToPlaylistDialog
 import nl.stoux.tfw.playlists.PlaylistsScreen
 import nl.stoux.tfw.ui.theme.TheFunkyWackTheme
 import androidx.compose.ui.unit.dp
@@ -134,6 +135,7 @@ class MainActivity : FragmentActivity() {
                 val playerIsOpen = scaffoldState.bottomSheetState.currentValue == SheetValue.Expanded || scaffoldState.bottomSheetState.targetValue == SheetValue.Expanded
                 var playerIsFullScreen by remember { mutableStateOf(false) }
                 var currentScreen by remember { mutableStateOf(AppScreen.Browse) }
+                var addToPlaylistLivesetId by remember { mutableStateOf<Long?>(null) }
                 val scope = rememberCoroutineScope()
 
                 // React to external request to open player (e.g., notification tap)
@@ -280,7 +282,8 @@ class MainActivity : FragmentActivity() {
                                                 viewModel = listViewModel,
                                                 onPlayClicked = { mediaId -> playerViewModel.playLiveset(mediaId) },
                                                 onOpenPlayer = { scope.launch { scaffoldState.bottomSheetState.expand() } },
-                                                onAddToQueue = { id -> queueManager.enqueueNext(id) }
+                                                onAddToQueue = { id -> queueManager.enqueueNext(id) },
+                                                onAddToPlaylist = if (isLoggedIn) ({ id -> addToPlaylistLivesetId = id }) else null,
                                             )
                                         }
                                         AppScreen.Favorites -> FavoritesScreen(
@@ -308,6 +311,13 @@ class MainActivity : FragmentActivity() {
                                     progress = progress,
                                     onPlayPause = { playerViewModel.playPause() },
                                     onOpenPlayer = { scope.launch { scaffoldState.bottomSheetState.expand() } }
+                                )
+                            }
+
+                            addToPlaylistLivesetId?.let { id ->
+                                AddToPlaylistDialog(
+                                    livesetId = id,
+                                    onDismiss = { addToPlaylistLivesetId = null },
                                 )
                             }
 

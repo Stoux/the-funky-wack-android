@@ -65,6 +65,7 @@ fun EditionListScreen(
     onPlayClicked: (mediaId: CustomMediaId) -> Unit,
     onOpenPlayer: () -> Unit,
     onAddToQueue: (livesetId: Long) -> Unit,
+    onAddToPlaylist: ((livesetId: Long) -> Unit)? = null,
 ) {
     val editions by viewModel.editions.collectAsState()
     val downloadStatuses by viewModel.downloadStatuses.collectAsState()
@@ -78,6 +79,7 @@ fun EditionListScreen(
         onPlayClicked = onPlayClicked,
         onOpenPlayer = onOpenPlayer,
         onAddToQueue = onAddToQueue,
+        onAddToPlaylist = onAddToPlaylist,
         onDownloadClicked = { viewModel.showDownloadQualityDialog(it) },
         onCancelDownload = { viewModel.cancelDownload(it) },
         onDeleteDownload = { viewModel.deleteDownload(it) },
@@ -114,6 +116,7 @@ private fun EditionList(
     onPlayClicked: (mediaId: CustomMediaId) -> Unit,
     onOpenPlayer: () -> Unit,
     onAddToQueue: (livesetId: Long) -> Unit,
+    onAddToPlaylist: ((livesetId: Long) -> Unit)?,
     onDownloadClicked: (livesetId: Long) -> Unit,
     onCancelDownload: (livesetId: Long) -> Unit,
     onDeleteDownload: (livesetId: Long) -> Unit,
@@ -154,6 +157,7 @@ private fun EditionList(
                         }
                     },
                     onAddToQueueClicked = { onAddToQueue(lwd.liveset.id) },
+                    onAddToPlaylistClicked = onAddToPlaylist?.let { handler -> { handler(lwd.liveset.id) } },
                     onDownloadClicked = { onDownloadClicked(lwd.liveset.id) },
                     onCancelDownload = { onCancelDownload(lwd.liveset.id) },
                     onDeleteDownload = { onDeleteDownload(lwd.liveset.id) },
@@ -323,6 +327,7 @@ private fun LivesetRow(
     isPlayable: Boolean,
     downloadStatus: DownloadStatus,
     onPlay: () -> Unit,
+    onAddToPlaylistClicked: (() -> Unit)? = null,
     onAddToQueueClicked: () -> Unit,
     onDownloadClicked: () -> Unit,
     onCancelDownload: () -> Unit,
@@ -437,6 +442,15 @@ private fun LivesetRow(
                             menuExpanded.value = false
                         }
                     )
+                    onAddToPlaylistClicked?.let { handler ->
+                        DropdownMenuItem(
+                            text = { Text("Add to playlist") },
+                            onClick = {
+                                handler()
+                                menuExpanded.value = false
+                            }
+                        )
+                    }
                     DropdownMenuItem(
                         text = { Text("Share") },
                         onClick = {

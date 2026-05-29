@@ -60,8 +60,11 @@ class PlaylistRepository @Inject constructor(
     suspend fun refresh() {
         try {
             val response = api.getPlaylists()
-            val combined = response.playlists + response.publicPlaylists
-            playlistDao.replaceAll(combined.map { it.toEntity() })
+            // The list endpoint splits ownership by array (own vs public) rather
+            // than via is_owner on each item. Tag explicitly before caching.
+            val own = response.playlists.map { it.copy(isOwn = true) }
+            val public = response.publicPlaylists.map { it.copy(isOwn = false) }
+            playlistDao.replaceAll((own + public).map { it.toEntity() })
         } catch (e: Exception) {
             Log.w("PlaylistRepository", "Failed to refresh playlists", e)
         }
