@@ -65,6 +65,10 @@ class MediaPlaybackService : MediaLibraryService() {
 
     @Inject lateinit var playbackTracker: PlaybackTracker
 
+    @Inject lateinit var listenAlongCoordinator: nl.stoux.tfw.service.playback.live.ListenAlongCoordinator
+
+    @Inject lateinit var reverbClient: nl.stoux.tfw.core.common.network.ws.ReverbClient
+
     private var mediaLibrarySession: MediaLibrarySession? = null
 
     private val serviceIOScope = CoroutineScope(Dispatchers.IO)
@@ -196,6 +200,11 @@ class MediaPlaybackService : MediaLibraryService() {
         trackManager.release()
         downloadTracker.release()
         playbackTracker.release()
+
+        // Tear down listen-along membership + the Reverb websocket so the app
+        // doesn't leave the user listed as an active listener after swipe-stop.
+        serviceIOScope.launch { runCatching { listenAlongCoordinator.leave() } }
+        reverbClient.disconnect()
 
         // Detach coordinator before releasing player (fire-and-forget, best-effort save)
         serviceIOScope.launch {
@@ -374,8 +383,11 @@ class MediaPlaybackService : MediaLibraryService() {
                         Log.e("MediaPlaybackService", "Playback service received multiple Media items to play? Unsupported! IDs: ${mediaItems.joinToString { it.mediaId }}")
                     }
 
-                    val customId = CustomMediaId.from(mediaItems[0].mediaId)
-                    resolveQueue(customId)
+                    val first = mediaItems[0]
+                    val customId = CustomMediaId.from(first.mediaId)
+                    val playlistShareCode = first.mediaMetadata.extras
+                        ?.getString(nl.stoux.tfw.service.playback.service.session.EXTRA_PLAYLIST_SHARE_CODE)
+                    resolveQueue(customId, playlistShareCode)
                 }
                 else -> emptyList()
             }
@@ -383,11 +395,17 @@ class MediaPlaybackService : MediaLibraryService() {
             return Futures.immediateFuture(items)
         }
 
-        private fun resolveQueue( mediaId: CustomMediaId ): List<MediaItem> {
+        private fun resolveQueue(mediaId: CustomMediaId, playlistShareCode: String? = null): List<MediaItem> {
             // We only support playing
             val livesetId = mediaId.getLivesetId()
             if (livesetId == null) return emptyList()
 
+            // Tap from inside a playlist shelf → queue is the playlist itself,
+            // rotated so the tapped liveset is first. Otherwise fall back to
+            // edition-context (the existing default).
+            if (playlistShareCode != null) {
+                return libraryManager.getQueueBasedForPlaylist(playlistShareCode, livesetId)
+            }
             return libraryManager.getQueueBasedForLiveset(livesetId)
         }
 
