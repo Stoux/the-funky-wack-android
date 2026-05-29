@@ -193,13 +193,35 @@ data class SavePositionRequest(
 // --- Listen Along ---
 
 @Serializable
+data class LiveSessionsListResponse(
+    val sessions: List<LiveSessionDto>,
+)
+
+@Serializable
 data class LiveSessionDto(
+    @SerialName("channel_token") val channelToken: String,
+    @SerialName("started_at") val startedAt: String,
+    val host: LiveSessionHostDto,
+    val liveset: LiveSessionLivesetDto? = null,
+    val position: Long = 0,
+    @SerialName("position_updated_at") val positionUpdatedAt: String? = null,
+    val quality: String? = null,
+    @SerialName("listeners_count") val listenersCount: Int = 0,
+)
+
+@Serializable
+data class LiveSessionHostDto(
+    val name: String,
+    @SerialName("user_id") val userId: Long? = null,
+)
+
+@Serializable
+data class LiveSessionLivesetDto(
     val id: Long,
-    val token: String,
-    @SerialName("host_name") val hostName: String,
-    @SerialName("liveset_id") val livesetId: Long,
-    val liveset: nl.stoux.tfw.core.common.network.dto.LivesetDto? = null,
-    @SerialName("listener_count") val listenerCount: Int = 0,
+    val title: String,
+    @SerialName("artist_name") val artistName: String? = null,
+    @SerialName("edition_number") val editionNumber: String? = null,
+    @SerialName("duration_in_seconds") val durationInSeconds: Long? = null,
 )
 
 @Serializable
@@ -209,7 +231,7 @@ data class JoinSessionRequest(
 
 @Serializable
 data class JoinSessionResponse(
-    val channel: String,
+    @SerialName("member_id") val memberId: Long,
     val mode: String,
 )
 

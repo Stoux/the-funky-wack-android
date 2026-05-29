@@ -13,7 +13,7 @@ import nl.stoux.tfw.core.common.network.dto.auth.FavoriteResponse
 import nl.stoux.tfw.core.common.network.dto.auth.FavoritesListResponse
 import nl.stoux.tfw.core.common.network.dto.auth.JoinSessionRequest
 import nl.stoux.tfw.core.common.network.dto.auth.JoinSessionResponse
-import nl.stoux.tfw.core.common.network.dto.auth.LiveSessionDto
+import nl.stoux.tfw.core.common.network.dto.auth.LiveSessionsListResponse
 import nl.stoux.tfw.core.common.network.dto.auth.LoginRequest
 import nl.stoux.tfw.core.common.network.dto.auth.PlaybackPositionsListResponse
 import nl.stoux.tfw.core.common.network.dto.auth.PlaybackStartRequest
@@ -131,15 +131,15 @@ interface ApiService {
     // --- Listen Along ---
 
     @GET("live/sessions")
-    suspend fun getLiveSessions(): List<LiveSessionDto>
+    suspend fun getLiveSessions(): LiveSessionsListResponse
 
-    @POST("live/sessions/{token}/join")
+    @POST("live/rooms/{token}/join")
     suspend fun joinLiveSession(
         @Path("token") token: String,
         @Body request: JoinSessionRequest,
     ): JoinSessionResponse
 
-    @POST("live/sessions/{token}/leave")
+    @POST("live/rooms/{token}/leave")
     suspend fun leaveLiveSession(@Path("token") token: String)
 
     // --- Broadcast Auth (for Pusher) ---
