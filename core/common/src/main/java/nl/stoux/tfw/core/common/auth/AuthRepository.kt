@@ -95,7 +95,7 @@ class AuthRepository @Inject constructor(
      * Poll for device code authorization status.
      */
     suspend fun pollDeviceCode(code: String): DeviceCodePollResponse {
-        val response = api.pollDeviceCode(code)
+        val response = api.pollDeviceCode(code, deviceIdManager.clientId)
         if (response.status == "authorized" && response.token != null && response.user != null) {
             storeAuth(response.token, response.user)
         }

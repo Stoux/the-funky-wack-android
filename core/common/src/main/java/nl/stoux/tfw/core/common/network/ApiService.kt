@@ -62,7 +62,10 @@ interface ApiService {
     suspend fun requestDeviceCode(@Body request: DeviceCodeRequest): DeviceCodeResponse
 
     @GET("auth/device-code/{code}/poll")
-    suspend fun pollDeviceCode(@Path("code") code: String): DeviceCodePollResponse
+    suspend fun pollDeviceCode(
+        @Path("code") code: String,
+        @retrofit2.http.Query("client_id") clientId: String,
+    ): DeviceCodePollResponse
 
     @POST("auth/device-code/{code}/authorize")
     suspend fun authorizeDeviceCode(@Path("code") code: String)

@@ -108,7 +108,9 @@ class AutomotiveLoginViewModel @Inject constructor(
                         return@launch
                     }
                 } catch (e: HttpException) {
-                    if (e.code() in 400..499) {
+                    // 410 Gone is the backend's explicit "expired" signal; everything
+                    // else (422 validation, 429 throttle, 5xx) is transient.
+                    if (e.code() == 410) {
                         _state.value = _state.value.copy(error = "Code expired. Tap retry.", code = null)
                         return@launch
                     }
