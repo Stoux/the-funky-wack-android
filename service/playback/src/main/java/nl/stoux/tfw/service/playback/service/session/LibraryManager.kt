@@ -8,9 +8,16 @@ import androidx.media3.common.MediaMetadata
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import nl.stoux.tfw.core.common.auth.AuthRepository
 import nl.stoux.tfw.core.common.database.dao.EditionWithContent
 import nl.stoux.tfw.core.common.database.dao.LivesetWithDetails
+import kotlinx.coroutines.runBlocking
+import nl.stoux.tfw.core.common.network.dto.auth.PlaylistDto
+import nl.stoux.tfw.core.common.network.dto.auth.PlaylistItemDto
 import nl.stoux.tfw.core.common.repository.EditionRepository
+import nl.stoux.tfw.core.common.repository.FavoritesRepository
+import nl.stoux.tfw.core.common.repository.PlaybackPositionRepository
+import nl.stoux.tfw.core.common.repository.PlaylistRepository
 import nl.stoux.tfw.core.common.database.entity.artworkUrl
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -25,6 +32,10 @@ enum class RefreshState { IDLE, REFRESHING, DONE }
 class LibraryManager @Inject constructor(
     private val editionRepository: EditionRepository,
     private val sessionSettings: SessionSettings,
+    private val authRepository: AuthRepository,
+    private val favoritesRepository: FavoritesRepository,
+    private val playlistRepository: PlaylistRepository,
+    private val playbackPositionRepository: PlaybackPositionRepository,
 ) {
 
     // Initialize to current time to prevent refreshIfStale() from triggering during startup race
@@ -97,26 +108,46 @@ class LibraryManager @Inject constructor(
             mediaId == CustomMediaId.ROOT -> getRootChildren()
             mediaId == CustomMediaId.ROOT_EDITIONS -> getEditions(page, pageSize)
             mediaId == CustomMediaId.ROOT_LIVESETS -> getAllLivesets(page, pageSize)
+            mediaId == CustomMediaId.ROOT_FAVORITES -> getFavoriteLivesets(page, pageSize)
+            mediaId == CustomMediaId.ROOT_PLAYLISTS -> getPlaylists(page, pageSize)
+            mediaId == CustomMediaId.ROOT_CONTINUE -> getContinueListening(page, pageSize)
             mediaId == CustomMediaId.ROOT_SETTINGS -> getSettings(page, pageSize)
             mediaId == CustomMediaId.SETTINGS_REFRESH -> getRefreshStatus()
 
             // Show items inside another item
             mediaId.isEdition() -> getEditionLivesets(mediaId, page, pageSize)
             mediaId.isLiveset() -> getLivesetTracks(mediaId, page, pageSize)
+            mediaId.isPlaylist() -> getPlaylistItems(mediaId, page, pageSize)
 
             else -> emptyList()
         }
     }
 
     private fun getRootChildren(): List<MediaItem> {
-        return listOf(
-            browsableMediaItem(CustomMediaId.ROOT_EDITIONS, "Editions"),
-            browsableMediaItem(CustomMediaId.ROOT_LIVESETS, "All livesets"),
-            browsableMediaItem(CustomMediaId.ROOT_SETTINGS, "Settings"),
-        )
+        val items = mutableListOf<MediaItem>()
+        // "Continue listening" goes first when logged in and there's something to resume
+        if (authRepository.isLoggedIn.value && playbackPositionRepository.positions.value.isNotEmpty()) {
+            items.add(browsableMediaItem(CustomMediaId.ROOT_CONTINUE, "Continue listening"))
+        }
+        items.add(browsableMediaItem(CustomMediaId.ROOT_EDITIONS, "Editions"))
+        items.add(browsableMediaItem(CustomMediaId.ROOT_LIVESETS, "All livesets"))
+        // Favorites and Playlists are personalized — only show when logged in
+        if (authRepository.isLoggedIn.value) {
+            items.add(browsableMediaItem(CustomMediaId.ROOT_FAVORITES, "Favorites"))
+            items.add(browsableMediaItem(CustomMediaId.ROOT_PLAYLISTS, "Playlists"))
+        }
+        items.add(browsableMediaItem(CustomMediaId.ROOT_SETTINGS, "Settings"))
+        return items
     }
 
-    fun getRootChildrenCount(): Int = 3 // Editions, All livesets, Settings
+    fun getRootChildrenCount(): Int {
+        var count = 3 // Editions, All livesets, Settings
+        if (authRepository.isLoggedIn.value) {
+            count += 2 // Favorites + Playlists
+            if (playbackPositionRepository.positions.value.isNotEmpty()) count += 1 // Continue
+        }
+        return count
+    }
 
     private fun getSettings(page: Int, pageSize: Int): List<MediaItem> {
         return listOf(
@@ -193,6 +224,71 @@ class LibraryManager @Inject constructor(
                         .build()
                 )
                 .build()
+        }
+    }
+
+    private fun getFavoriteLivesets(page: Int, pageSize: Int): List<MediaItem> {
+        val favoriteIds = favoritesRepository.favoriteLivesetIds.value
+        val livesets = favoriteIds.mapNotNull { editionRepository.getCachedLiveset(it) }
+        return paginate(livesets, page, pageSize).map { liveset -> livesetMediaItem(liveset, true) }
+    }
+
+    private fun getPlaylists(page: Int, pageSize: Int): List<MediaItem> {
+        sessionSettings.queueEditionLivesetsOnly = false
+        val playlists = playlistRepository.playlists.value
+        // Trigger a refresh in the background so subsequent navigations are fresher
+        if (playlists.isEmpty()) {
+            CoroutineScope(Dispatchers.IO).launch {
+                runCatching { playlistRepository.refresh() }
+                childrenChangedCallback?.onChildrenChanged(
+                    CustomMediaId.ROOT_PLAYLISTS.original,
+                    playlistRepository.playlists.value.size,
+                )
+            }
+        }
+        return paginate(playlists, page, pageSize).map { playlistMediaItem(it) }
+    }
+
+    private fun getPlaylistItems(mediaId: CustomMediaId, page: Int, pageSize: Int): List<MediaItem> {
+        val shareCode = mediaId.getPlaylistShareCode() ?: return emptyList()
+        // Fetch the playlist detail synchronously — the Media3 callback is already on a background thread
+        val detail = runCatching { runBlocking { playlistRepository.getPlaylist(shareCode) } }.getOrNull() ?: return emptyList()
+        val items = detail.items.orEmpty()
+        return paginate(items, page, pageSize).mapNotNull { item ->
+            val livesetId = item.livesetId
+            val liveset = editionRepository.getCachedLiveset(livesetId) ?: return@mapNotNull null
+            livesetMediaItem(liveset, showEditionInfo = true)
+        }
+    }
+
+    private fun playlistMediaItem(playlist: PlaylistDto): MediaItem {
+        val count = playlist.itemsCount
+        val itemsLabel = "$count item${if (count == 1) "" else "s"}"
+        return MediaItem.Builder()
+            .setMediaId(CustomMediaId.forPlaylist(playlist.shareCode).original)
+            .setMediaMetadata(
+                MediaMetadata.Builder()
+                    .setTitle(playlist.name)
+                    .setArtist(itemsLabel)
+                    .setIsBrowsable(true)
+                    .setIsPlayable(false)
+                    .build()
+            )
+            .build()
+    }
+
+    private fun getContinueListening(page: Int, pageSize: Int): List<MediaItem> {
+        sessionSettings.queueEditionLivesetsOnly = false
+        val positions = playbackPositionRepository.positions.value
+        val mapped = positions.mapNotNull { pos ->
+            val liveset = editionRepository.getCachedLiveset(pos.livesetId) ?: return@mapNotNull null
+            liveset to pos.position
+        }
+        return paginate(mapped, page, pageSize).map { (lwd, positionSec) ->
+            val baseMedia = livesetMediaItem(lwd, showEditionInfo = true)
+            // Override mediaId to encode the resume position so playback jumps to the right spot
+            val newMediaId = "liveset:${lwd.liveset.id}@${positionSec}"
+            baseMedia.buildUpon().setMediaId(newMediaId).build()
         }
     }
 
@@ -316,12 +412,8 @@ class LibraryManager @Inject constructor(
         showEditionInfo: Boolean,
     ): MediaItem {
         val mediaId = CustomMediaId.forEntity(lwd.liveset)
-        var title = lwd.liveset.title
-        var artist = lwd.liveset.artistName
-        if (showEditionInfo) {
-            title = "#${lwd.liveset.lineupOrder ?: "?"} $title"
-            artist = "TFW #${lwd.edition.number} - $artist"
-        }
+        val title = PlayableMediaItemBuilder.formatTitle(lwd, showEditionInfo)
+        val artist = PlayableMediaItemBuilder.formatArtist(lwd, showEditionInfo)
 
         return MediaItem.Builder()
             .setMediaId(mediaId.original)

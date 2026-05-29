@@ -48,12 +48,8 @@ object PlayableMediaItemBuilder {
         val artworkUri = edition.artworkUrl?.toUri()
 
         // Build title/artist (optionally with edition info)
-        var title = liveset.title
-        var artist = liveset.artistName
-        if (showEditionInfo) {
-            title = "#${liveset.lineupOrder ?: "?"} $title"
-            artist = "TFW #${edition.number} - $artist"
-        }
+        val title = formatTitle(lwd, showEditionInfo)
+        val artist = formatArtist(lwd, showEditionInfo)
 
         return MediaItem.Builder()
             .setMediaId(mediaId)
@@ -71,6 +67,18 @@ object PlayableMediaItemBuilder {
                     .build()
             )
             .build()
+    }
+
+    fun formatTitle(lwd: LivesetWithDetails, showEditionInfo: Boolean): String {
+        var title = lwd.liveset.title
+        if (showEditionInfo) title = "#${lwd.liveset.lineupOrder ?: "?"} $title"
+        return title
+    }
+
+    fun formatArtist(lwd: LivesetWithDetails, showEditionInfo: Boolean): String {
+        var artist = lwd.liveset.artistName
+        if (showEditionInfo) artist = "TFW #${lwd.edition.number} - $artist"
+        return artist
     }
 
     /**

@@ -9,6 +9,7 @@ data class CustomMediaId(
     val type: String = original,
     val id: Long? = null,
     val timestamp: Int? = null,
+    val shareCode: String? = null,
 ) {
 
     fun isEdition(): Boolean {
@@ -19,12 +20,20 @@ data class CustomMediaId(
         return type == TYPE_LIVESET && id != null
     }
 
+    fun isPlaylist(): Boolean {
+        return type == TYPE_PLAYLIST && shareCode != null
+    }
+
     fun getEditionId() : Long? {
         return if (isEdition()) id else null
     }
 
     fun getLivesetId() : Long? {
         return if (isLiveset()) id else null
+    }
+
+    fun getPlaylistShareCode(): String? {
+        return if (isPlaylist()) shareCode else null
     }
 
     companion object {
@@ -34,6 +43,9 @@ data class CustomMediaId(
         // => Top level options
         private const val MENU_ID_EDITIONS = "root.editions"
         private const val MENU_ID_LIVESETS = "root.livesets"
+        private const val MENU_ID_FAVORITES = "root.favorites"
+        private const val MENU_ID_PLAYLISTS = "root.playlists"
+        private const val MENU_ID_CONTINUE = "root.continue"
         private const val MENU_ID_SETTINGS = "root.settings"
         // => Actions
         private const val ACTION_REFRESH_LIVESETS = "settings.refresh"
@@ -41,13 +53,20 @@ data class CustomMediaId(
         // Item types
         private const val TYPE_EDITION = "edition"
         private const val TYPE_LIVESET = "liveset"
+        private const val TYPE_PLAYLIST = "playlist"
 
         // Static root items for quick comparisons
         val ROOT = CustomMediaId(MENU_ID_ROOT)
         val ROOT_EDITIONS = CustomMediaId(MENU_ID_EDITIONS)
         val ROOT_LIVESETS = CustomMediaId(MENU_ID_LIVESETS)
+        val ROOT_FAVORITES = CustomMediaId(MENU_ID_FAVORITES)
+        val ROOT_PLAYLISTS = CustomMediaId(MENU_ID_PLAYLISTS)
+        val ROOT_CONTINUE = CustomMediaId(MENU_ID_CONTINUE)
         val ROOT_SETTINGS = CustomMediaId(MENU_ID_SETTINGS)
         val SETTINGS_REFRESH = CustomMediaId(ACTION_REFRESH_LIVESETS)
+
+        fun forPlaylist(shareCode: String): CustomMediaId =
+            CustomMediaId("$TYPE_PLAYLIST:$shareCode", TYPE_PLAYLIST, shareCode = shareCode)
 
         /**
          * Parse the Media ID into a [CustomMediaId] object, or null if invalid/empty.
@@ -67,12 +86,19 @@ data class CustomMediaId(
             if (mediaId == MENU_ID_ROOT) return ROOT
             if (mediaId == MENU_ID_EDITIONS) return ROOT_EDITIONS
             if (mediaId == MENU_ID_LIVESETS) return ROOT_LIVESETS
+            if (mediaId == MENU_ID_FAVORITES) return ROOT_FAVORITES
+            if (mediaId == MENU_ID_PLAYLISTS) return ROOT_PLAYLISTS
+            if (mediaId == MENU_ID_CONTINUE) return ROOT_CONTINUE
             if (mediaId == MENU_ID_SETTINGS) return ROOT_SETTINGS
             if (mediaId == ACTION_REFRESH_LIVESETS) return SETTINGS_REFRESH
 
             // Check if we're a ID'd type
             val typeAndIds = mediaId.split(':', limit = 2)
             if (typeAndIds.size == 2) {
+                // Playlist mediaIds carry a non-numeric share code, handle them separately
+                if (typeAndIds[0] == TYPE_PLAYLIST) {
+                    return CustomMediaId(mediaId, TYPE_PLAYLIST, shareCode = typeAndIds[1])
+                }
                 // Check if we're a supported type
                 val type = when {
                     typeAndIds[0] == TYPE_EDITION -> TYPE_EDITION
