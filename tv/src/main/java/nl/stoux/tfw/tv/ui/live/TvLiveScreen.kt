@@ -48,6 +48,8 @@ class TvLiveViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(TvLiveUiState(isLoading = true))
     val uiState: StateFlow<TvLiveUiState> = _uiState.asStateFlow()
 
+    val activeRoom: StateFlow<ListenAlongCoordinator.ActiveRoom?> = listenAlongCoordinator.activeRoom
+
     init {
         refresh()
         listenAlongCoordinator.subscribePresenceLive()
@@ -65,6 +67,16 @@ class TvLiveViewModel @Inject constructor(
         }
     }
 
+    fun joinSync(channelToken: String) {
+        viewModelScope.launch {
+            listenAlongCoordinator.join(channelToken, mode = "synced")
+        }
+    }
+
+    fun leave() {
+        viewModelScope.launch { listenAlongCoordinator.leave() }
+    }
+
     override fun onCleared() {
         listenAlongCoordinator.unsubscribePresenceLive()
         super.onCleared()
@@ -77,6 +89,7 @@ fun TvLiveScreen(
     viewModel: TvLiveViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsState()
+    val activeRoom by viewModel.activeRoom.collectAsState()
 
     Column(modifier = Modifier.fillMaxSize().padding(48.dp)) {
         Text("Live", style = MaterialTheme.typography.headlineLarge)
@@ -103,6 +116,7 @@ fun TvLiveScreen(
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 items(state.sessions, key = { it.channelToken }) { session ->
+                    val isActive = activeRoom?.channelToken == session.channelToken
                     Card(modifier = Modifier.fillMaxWidth()) {
                         Column(modifier = Modifier.padding(24.dp)) {
                             Text(
@@ -120,6 +134,14 @@ fun TvLiveScreen(
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
+                            }
+                            Spacer(modifier = Modifier.height(16.dp))
+                            if (isActive) {
+                                Button(onClick = { viewModel.leave() }) { Text("Leave") }
+                            } else {
+                                Button(onClick = { viewModel.joinSync(session.channelToken) }) {
+                                    Text("Listen along")
+                                }
                             }
                         }
                     }

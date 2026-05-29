@@ -22,6 +22,8 @@ import kotlinx.coroutines.launch
 import nl.stoux.tfw.core.common.database.dao.LivesetWithDetails
 import nl.stoux.tfw.core.common.database.entity.TrackEntity
 import nl.stoux.tfw.feature.player.waveforms.WaveformDownloader
+import nl.stoux.tfw.service.playback.live.HostEvent
+import nl.stoux.tfw.service.playback.live.ListenAlongCoordinator
 import nl.stoux.tfw.service.playback.service.MediaPlaybackService
 import nl.stoux.tfw.service.playback.service.manager.LivesetTrackListener
 import nl.stoux.tfw.service.playback.service.manager.LivesetTrackManager
@@ -29,6 +31,8 @@ import nl.stoux.tfw.service.playback.service.manager.UnbindCallback
 import nl.stoux.tfw.service.playback.service.queue.QueueManager
 import nl.stoux.tfw.service.playback.settings.PlaybackSettingsRepository
 import nl.stoux.tfw.service.playback.settings.PlaybackSettingsRepository.AudioQuality
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import nl.stoux.tfw.tv.data.TvSettingsRepository
 import nl.stoux.tfw.tv.data.TvSettingsRepository.OledSettings
 import javax.inject.Inject
@@ -41,7 +45,32 @@ class TvNowPlayingViewModel @Inject constructor(
     private val waveformDownloader: WaveformDownloader,
     private val tvSettingsRepository: TvSettingsRepository,
     private val playbackSettings: PlaybackSettingsRepository,
+    private val listenAlongCoordinator: ListenAlongCoordinator,
 ) : ViewModel() {
+
+    init {
+        // Mirror host actions when the user is in a synced listen-along room
+        viewModelScope.launch {
+            listenAlongCoordinator.hostEvents.collect { event ->
+                withContext(Dispatchers.Main) { handleHostEvent(event) }
+            }
+        }
+    }
+
+    private fun handleHostEvent(event: HostEvent) {
+        val c = controller
+        when (event) {
+            is HostEvent.Seek -> c?.seekTo(event.position * 1000)
+            is HostEvent.Pause -> c?.pause()
+            is HostEvent.Resume -> c?.play()
+            is HostEvent.TrackChange -> queueManager.setContextFromLiveset(
+                livesetId = event.livesetId,
+                startPositionMs = event.position * 1000,
+                autoplay = true,
+            )
+            HostEvent.Stop -> { /* host ended; keep listener's playback as-is */ }
+        }
+    }
 
     private var controller: MediaController? = null
     private var trackManagerUnbindCallback: UnbindCallback? = null
