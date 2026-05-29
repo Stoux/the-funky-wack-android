@@ -731,8 +731,14 @@ class QueueManager @Inject constructor(
                 val livesetIndex = _state.value.currentLivesetId?.let { id -> effective.indexOfFirst { it.livesetId == id }.takeIf { it >= 0 } }
                 val targetIndex = explicitIndexOverride ?: explicitIndex ?: instanceIndex ?: livesetIndex ?: 0
 
-                val pos = startPositionMs ?: currentPosition
-                val needsPositioning = targetIndex != player.currentMediaItemIndex || (startPositionMs != null) || (startEffectiveIndex != null)
+                // For explicit user-driven set-context calls (startLivesetId or
+                // startEffectiveIndex provided), always reposition — even if the
+                // new target index happens to match the previously playing index.
+                // Otherwise setMediaItems(resetPosition=false) would silently keep
+                // the old playhead and refuse to switch tracks.
+                val isExplicitStart = startLivesetId != null || startEffectiveIndex != null
+                val pos = startPositionMs ?: if (isExplicitStart) 0L else currentPosition
+                val needsPositioning = isExplicitStart || startPositionMs != null || targetIndex != player.currentMediaItemIndex
 
                 // For CastPlayer, use setMediaItems with built-in start position to avoid seek race condition
                 // CastPlayer returns error 2001 if we try to seek before media is loaded
