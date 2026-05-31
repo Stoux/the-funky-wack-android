@@ -123,16 +123,25 @@ class PlaybackResumeCoordinator @Inject constructor(
                 Log.d("PlaybackResume", "Skipping restore: user already initiated playback")
                 return
             }
-            withContext(Dispatchers.Main) {
-                if (player.currentMediaItem != null) return@withContext
+            val hasMediaItem = withContext(Dispatchers.Main) { player.currentMediaItem != null }
+            if (hasMediaItem) {
+                Log.d("PlaybackResume", "Skipping restore: player already has a media item")
+                return
             }
 
             // Parse the last media ID & make sure it's a (valid) liveset ID
             val mediaId = CustomMediaId.from(last.mediaId)
             val livesetId = mediaId.getLivesetId() ?: return
 
-            // Centralized restore: build full context and apply via QueueManager; do NOT autoplay
+            // Re-check on the Main thread right before applying — the user may
+            // have tapped a liveset during the suspends above, in which case
+            // their setContextFromLiveset is already in flight and we'd stomp
+            // on it with the resumed state otherwise.
             withContext(Dispatchers.Main) {
+                if (queueManager.hasUserInitiatedPlayback() || player.currentMediaItem != null) {
+                    Log.d("PlaybackResume", "Skipping restore (post-await): user initiated or player loaded")
+                    return@withContext
+                }
                 queueManager.setContextFromLiveset(livesetId = livesetId, startPositionMs = last.positionMs, autoplay = false)
                 Log.d("PlaybackResume", "Restored state (with context): ${last.mediaId}@${last.positionMs}}")
             }
