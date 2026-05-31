@@ -327,6 +327,10 @@ class PlayerViewModel @Inject constructor(
             // Honour the @timestamp suffix if present (used by Continue Listening
             // taps to resume at a saved position).
             val startPositionMs = mediaId.timestamp?.toLong()?.times(1000) ?: 0L
+            android.util.Log.d(
+                "PlayerViewModel",
+                "playLiveset id=$livesetId startPositionMs=$startPositionMs synced=${isSyncedListening.value}",
+            )
             viewModelScope.launch {
                 queueManager.setContextFromLiveset(
                     livesetId = livesetId,

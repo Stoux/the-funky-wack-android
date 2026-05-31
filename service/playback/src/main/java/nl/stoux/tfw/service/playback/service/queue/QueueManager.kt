@@ -8,6 +8,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
@@ -354,6 +355,7 @@ class QueueManager @Inject constructor(
     }
 
     fun setContextFromLiveset(livesetId: Long, startPositionMs: Long? = null, autoplay: Boolean = true) {
+        Log.d("QueueManager", "setContextFromLiveset id=$livesetId startPositionMs=$startPositionMs autoplay=$autoplay")
         // Mark that user initiated playback (prevents restore from overwriting)
         if (autoplay) {
             userInitiatedPlayback = true
@@ -739,6 +741,10 @@ class QueueManager @Inject constructor(
                 val isExplicitStart = startLivesetId != null || startEffectiveIndex != null
                 val pos = startPositionMs ?: if (isExplicitStart) 0L else currentPosition
                 val needsPositioning = isExplicitStart || startPositionMs != null || targetIndex != player.currentMediaItemIndex
+                Log.d(
+                    "QueueManager",
+                    "applyToPlayerSafely startLivesetId=$startLivesetId startPositionMs=$startPositionMs autoplay=$autoplay effectiveSize=${effective.size} targetIndex=$targetIndex playerIndex=${player.currentMediaItemIndex} playerPos=$currentPosition pos=$pos needsPositioning=$needsPositioning"
+                )
 
                 // For CastPlayer, use setMediaItems with built-in start position to avoid seek race condition
                 // CastPlayer returns error 2001 if we try to seek before media is loaded
@@ -839,11 +845,14 @@ class QueueManager @Inject constructor(
     }
 
     /**
-     * Release coroutine scopes. Call from MediaPlaybackService.onDestroy().
+     * Cancel in-flight work on service destroy. Singleton lifetime outlives the
+     * MediaPlaybackService, so we must NOT cancel the scopes themselves — once
+     * a scope is cancelled it never resumes, and every subsequent scope.launch
+     * silently no-ops on the next service onCreate. Cancel children only.
      */
     fun release() {
-        scope.cancel()
-        ioScope.cancel()
+        scope.coroutineContext.cancelChildren()
+        ioScope.coroutineContext.cancelChildren()
     }
 
     // endregion

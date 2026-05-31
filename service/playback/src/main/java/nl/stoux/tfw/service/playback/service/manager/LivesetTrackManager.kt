@@ -8,6 +8,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import nl.stoux.tfw.core.common.database.dao.LivesetWithDetails
@@ -424,12 +425,13 @@ class LivesetTrackManager @Inject constructor(
     )
 
     /**
-     * Release coroutine scopes. Call from MediaPlaybackService.onDestroy().
+     * Cancel in-flight work on service destroy. Singleton: must NOT cancel the
+     * scopes themselves (see QueueManager.release for the same rationale).
      */
     fun release() {
         progressReporter.stop()
-        serviceIOScope.cancel()
-        serviceMainScope.cancel()
+        serviceIOScope.coroutineContext.cancelChildren()
+        serviceMainScope.coroutineContext.cancelChildren()
     }
 
 }
