@@ -89,4 +89,17 @@ class PlaylistsViewModel @Inject constructor(
             autoplay = true,
         )
     }
+
+    fun removeFromPlaylist(shareCode: String, livesetId: Long) {
+        viewModelScope.launch {
+            runCatching { playlistRepository.removeItem(shareCode, livesetId) }
+            // Refetch detail so the items list reflects the removal
+            val current = _uiState.value.selectedPlaylist ?: return@launch
+            if (current.shareCode != shareCode) return@launch
+            runCatching {
+                val detail = playlistRepository.getPlaylist(shareCode)
+                _uiState.value = _uiState.value.copy(selectedPlaylist = detail)
+            }
+        }
+    }
 }

@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FloatingActionButton
@@ -59,6 +60,9 @@ fun PlaylistsScreen(
                 viewModel.playFromPlaylist(selectedPlaylist.shareCode, livesetId)
                 // Still notify the host so it can do things like open the player sheet
                 onPlayClicked("liveset:$livesetId")
+            },
+            onRemoveItem = { livesetId ->
+                viewModel.removeFromPlaylist(selectedPlaylist.shareCode, livesetId)
             },
         )
         return
@@ -143,6 +147,7 @@ private fun PlaylistDetailContent(
     resolveLiveset: (Long) -> nl.stoux.tfw.core.common.database.dao.LivesetWithDetails?,
     onBack: () -> Unit,
     onPlayItem: (Long) -> Unit,
+    onRemoveItem: (Long) -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -178,17 +183,21 @@ private fun PlaylistDetailContent(
                         nl.stoux.tfw.shared.LivesetListItem(
                             lwd = lwd,
                             onPlay = { onPlayItem(item.livesetId) },
+                            trailing = if (playlist.isOwn) ({
+                                IconButton(onClick = { onRemoveItem(item.livesetId) }) {
+                                    Icon(Icons.Default.Close, contentDescription = "Remove from playlist")
+                                }
+                            }) else null,
                         )
                     } else {
                         // Cached liveset not available — show a minimal fallback row
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { onPlayItem(item.livesetId) }
                                 .padding(12.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Column {
+                            Column(modifier = Modifier.weight(1f).clickable { onPlayItem(item.livesetId) }) {
                                 Text(
                                     item.liveset?.title ?: "Liveset #${item.livesetId}",
                                     style = MaterialTheme.typography.bodyLarge,
@@ -198,6 +207,11 @@ private fun PlaylistDetailContent(
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
+                            }
+                            if (playlist.isOwn) {
+                                IconButton(onClick = { onRemoveItem(item.livesetId) }) {
+                                    Icon(Icons.Default.Close, contentDescription = "Remove from playlist")
+                                }
                             }
                         }
                     }
