@@ -197,7 +197,12 @@ class MainActivity : FragmentActivity() {
                         topBar = {
                             CenterAlignedTopAppBar(
                                 navigationIcon = {
-                                    IconButton(onClick = { scope.launch { drawerState.open() } }) {
+                                    IconButton(onClick = {
+                                        scope.launch {
+                                            if (playerIsOpen) scaffoldState.bottomSheetState.partialExpand()
+                                            drawerState.open()
+                                        }
+                                    }) {
                                         Icon(Icons.Default.Menu, contentDescription = "Menu")
                                     }
                                 },
