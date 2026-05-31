@@ -34,6 +34,7 @@ fun LiveScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val activeRoom by viewModel.activeRoom.collectAsState()
+    val currentUser by viewModel.currentUser.collectAsState()
 
     when {
         uiState.isLoading && uiState.sessions.isEmpty() -> {
@@ -86,8 +87,9 @@ fun LiveScreen(
                     LiveSessionCard(
                         session = session,
                         isActive = activeRoom?.channelToken == session.channelToken,
+                        isOwnSession = currentUser?.id != null && currentUser?.id == session.host.userId,
                         onJoinSync = { viewModel.joinSync(session.channelToken) },
-                        onJoinIndependent = { viewModel.joinIndependent(session.channelToken) },
+                        onPlaySolo = { viewModel.playSolo(session.channelToken) },
                         onLeave = { viewModel.leave() },
                     )
                 }
@@ -100,8 +102,9 @@ fun LiveScreen(
 private fun LiveSessionCard(
     session: LiveSessionDto,
     isActive: Boolean,
+    isOwnSession: Boolean,
     onJoinSync: () -> Unit,
-    onJoinIndependent: () -> Unit,
+    onPlaySolo: () -> Unit,
     onLeave: () -> Unit,
 ) {
     Card(
@@ -113,9 +116,10 @@ private fun LiveSessionCard(
                 style = MaterialTheme.typography.titleMedium,
             )
             Text(
-                "Hosted by ${session.host.name}",
+                if (isOwnSession) "You're hosting" else "Hosted by ${session.host.name}",
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = if (isOwnSession) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.onSurfaceVariant,
             )
             if (session.listenersCount > 0) {
                 Text(
@@ -124,25 +128,27 @@ private fun LiveSessionCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            Spacer(modifier = Modifier.height(12.dp))
-            if (isActive) {
-                Row {
-                    Text(
-                        "Listening along",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.weight(1f),
-                    )
-                    TextButton(onClick = onLeave) { Text("Leave") }
-                }
-            } else {
-                Row {
-                    Button(onClick = onJoinSync, modifier = Modifier.weight(1f)) {
-                        Text("Listen along")
+            if (!isOwnSession) {
+                Spacer(modifier = Modifier.height(12.dp))
+                if (isActive) {
+                    Row {
+                        Text(
+                            "Listening along",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.weight(1f),
+                        )
+                        TextButton(onClick = onLeave) { Text("Leave") }
                     }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    OutlinedButton(onClick = onJoinIndependent) {
-                        Text("Solo")
+                } else {
+                    Row {
+                        Button(onClick = onJoinSync, modifier = Modifier.weight(1f)) {
+                            Text("Listen along")
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        OutlinedButton(onClick = onPlaySolo) {
+                            Text("Solo")
+                        }
                     }
                 }
             }
