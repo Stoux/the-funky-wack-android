@@ -10,6 +10,7 @@ data class LoginRequest(
     val email: String,
     val password: String,
     @SerialName("device_name") val deviceName: String,
+    @SerialName("device_type") val deviceType: String? = null,
 )
 
 @Serializable
@@ -315,6 +316,13 @@ data class DeviceDto(
 @Serializable
 data class DeviceUpdateRequest(
     @SerialName("device_nickname") val deviceNickname: String,
+)
+
+@Serializable
+data class DeviceRegisterRequest(
+    @SerialName("client_id") val clientId: String,
+    @SerialName("device_name") val deviceName: String? = null,
+    @SerialName("device_type") val deviceType: String? = null,
 )
 
 // --- Invite Codes ---

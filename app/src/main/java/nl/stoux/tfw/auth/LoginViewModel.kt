@@ -1,14 +1,17 @@
 package nl.stoux.tfw.auth
 
+import android.content.Context
 import android.os.Build
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import nl.stoux.tfw.core.common.auth.AuthRepository
+import nl.stoux.tfw.core.common.device.detectDeviceType
 import nl.stoux.tfw.core.common.network.dto.auth.UserDto
 import javax.inject.Inject
 
@@ -27,6 +30,7 @@ data class LoginUiState(
 
 @HiltViewModel
 class LoginViewModel @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val authRepository: AuthRepository,
 ) : ViewModel() {
 
@@ -55,7 +59,7 @@ class LoginViewModel @Inject constructor(
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
             try {
                 val deviceName = "${Build.MANUFACTURER} ${Build.MODEL}"
-                authRepository.login(state.email, state.password, deviceName)
+                authRepository.login(state.email, state.password, deviceName, detectDeviceType(context))
                 _uiState.value = _uiState.value.copy(isLoading = false, loginSuccess = true)
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(

@@ -8,13 +8,16 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import nl.stoux.tfw.core.common.device.DeviceIdManager
+import nl.stoux.tfw.core.common.device.detectDeviceType
 import nl.stoux.tfw.core.common.network.ApiService
 import nl.stoux.tfw.core.common.util.encryptedPrefs
 import nl.stoux.tfw.core.common.network.dto.auth.DeviceCodeRequest
 import nl.stoux.tfw.core.common.network.dto.auth.DeviceCodeResponse
 import nl.stoux.tfw.core.common.network.dto.auth.DeviceCodePollResponse
+import nl.stoux.tfw.core.common.network.dto.auth.DeviceRegisterRequest
 import nl.stoux.tfw.core.common.network.dto.auth.LoginRequest
 import nl.stoux.tfw.core.common.network.dto.auth.UserDto
+import android.os.Build
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -55,8 +58,8 @@ class AuthRepository @Inject constructor(
     /**
      * Login with email and password. Returns the user on success.
      */
-    suspend fun login(email: String, password: String, deviceName: String): UserDto {
-        val response = api.login(LoginRequest(email, password, deviceName))
+    suspend fun login(email: String, password: String, deviceName: String, deviceType: String? = null): UserDto {
+        val response = api.login(LoginRequest(email, password, deviceName, deviceType))
         storeAuth(response.token, response.user)
         return response.user
     }
@@ -98,8 +101,24 @@ class AuthRepository @Inject constructor(
         val response = api.pollDeviceCode(code, deviceIdManager.clientId)
         if (response.status == "authorized" && response.token != null && response.user != null) {
             storeAuth(response.token, response.user)
+            // Device-code authorize doesn't create a device row server-side, so
+            // the first authenticated call from a TV/car would otherwise land
+            // with UA-parsed name+type. Push the real fingerprint now.
+            runCatching { registerDevice() }
+                .onFailure { Log.w("AuthRepository", "registerDevice after device-code failed", it) }
         }
         return response
+    }
+
+    /** Push this device's true name + type to the server. Idempotent. */
+    suspend fun registerDevice() {
+        api.registerDevice(
+            DeviceRegisterRequest(
+                clientId = deviceIdManager.clientId,
+                deviceName = "${Build.MANUFACTURER} ${Build.MODEL}",
+                deviceType = detectDeviceType(context),
+            )
+        )
     }
 
     /**

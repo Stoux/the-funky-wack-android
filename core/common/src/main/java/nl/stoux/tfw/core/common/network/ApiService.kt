@@ -8,6 +8,7 @@ import nl.stoux.tfw.core.common.network.dto.auth.BroadcastAuthResponse
 import nl.stoux.tfw.core.common.network.dto.auth.CreatePlaylistRequest
 import nl.stoux.tfw.core.common.network.dto.auth.DetachResponse
 import nl.stoux.tfw.core.common.network.dto.auth.DeviceCodePollResponse
+import nl.stoux.tfw.core.common.network.dto.auth.DeviceRegisterRequest
 import nl.stoux.tfw.core.common.network.dto.auth.DeviceUpdateRequest
 import nl.stoux.tfw.core.common.network.dto.auth.DevicesListResponse
 import nl.stoux.tfw.core.common.network.dto.auth.InviteResponse
@@ -181,6 +182,9 @@ interface ApiService {
 
     @GET("devices")
     suspend fun getDevices(): DevicesListResponse
+
+    @POST("devices/register")
+    suspend fun registerDevice(@Body request: DeviceRegisterRequest)
 
     @PUT("devices/{id}")
     suspend fun updateDevice(
