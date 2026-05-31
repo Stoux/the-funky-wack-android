@@ -9,6 +9,7 @@ import android.content.pm.PackageManager
 import android.content.res.Configuration
 import androidx.annotation.OptIn
 import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DataSourceBitmapLoader
 import androidx.media3.session.CacheBitmapLoader
@@ -237,6 +238,33 @@ class MediaPlaybackService : MediaLibraryService() {
     }
 
     private inner class SessionCallback : MediaLibrarySession.Callback {
+
+        /**
+         * Any next/prev/seek issued at the Player layer by an EXTERNAL controller
+         * (notification, BT remote, Auto/Automotive transport) while we're in a
+         * synced listen-along room must be a user-initiated sync break — the
+         * in-app PlayerViewModel paths intercept these and show the leave-sync
+         * dialog before reaching the player. Our own in-app controller also
+         * mirrors host events (Seek/Pause/Resume) here, so we filter those out
+         * by package name. Fire a leave + let the command proceed.
+         */
+        override fun onPlayerCommandRequest(
+            session: MediaSession,
+            controller: MediaSession.ControllerInfo,
+            playerCommand: Int,
+        ): Int {
+            val isExternal = controller.packageName != packageName
+            val syncBreaking = playerCommand == Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM ||
+                playerCommand == Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM ||
+                playerCommand == Player.COMMAND_SEEK_TO_NEXT ||
+                playerCommand == Player.COMMAND_SEEK_TO_PREVIOUS ||
+                playerCommand == Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM ||
+                playerCommand == Player.COMMAND_SEEK_TO_MEDIA_ITEM
+            if (isExternal && syncBreaking && listenAlongCoordinator.activeRoom.value?.mode == "synced") {
+                serviceIOScope.launch { runCatching { listenAlongCoordinator.leave() } }
+            }
+            return super.onPlayerCommandRequest(session, controller, playerCommand)
+        }
 
         @OptIn(UnstableApi::class)
         override fun onConnect(
