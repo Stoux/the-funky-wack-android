@@ -11,7 +11,12 @@ sealed interface HostEvent {
     data class Seek(val position: Long) : HostEvent
     data class Pause(val position: Long) : HostEvent
     data class Resume(val position: Long) : HostEvent
-    data class TrackChange(val livesetId: Long, val position: Long, val quality: String?) : HostEvent
+    data class TrackChange(
+        val livesetId: Long,
+        val position: Long,
+        val quality: String?,
+        val paused: Boolean = false,
+    ) : HostEvent
     object Stop : HostEvent
 }
 

@@ -93,6 +93,30 @@ fun PlayerScreen(
 ) {
     // Collect state
     val liveset by viewModel.currentLiveset.collectAsState()
+    val isSynced by viewModel.isSyncedListening.collectAsState()
+    val leaveSyncPrompt by viewModel.leaveSyncPrompt.collectAsState()
+
+    if (leaveSyncPrompt) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { viewModel.dismissLeaveSyncPrompt() },
+            title = { androidx.compose.material3.Text("Leave session?") },
+            text = {
+                androidx.compose.material3.Text(
+                    "You're listening along with the host. Leave the session to seek or control playback yourself."
+                )
+            },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = { viewModel.confirmLeaveSync() }) {
+                    androidx.compose.material3.Text("Leave session")
+                }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = { viewModel.dismissLeaveSyncPrompt() }) {
+                    androidx.compose.material3.Text("Stay in sync")
+                }
+            },
+        )
+    }
 
     var playerControlsContainerHeight by remember { mutableStateOf<Dp?>(null) }
     val density = LocalDensity.current
@@ -202,6 +226,39 @@ fun PlayerScreen(
             }
 
 
+        }
+
+        if (isSynced) {
+            SyncBadge(
+                onClick = { viewModel.requestLeaveSyncPrompt() },
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = 12.dp, end = 12.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun SyncBadge(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    androidx.compose.material3.Surface(
+        modifier = modifier,
+        onClick = onClick,
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(50),
+        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.85f),
+        contentColor = MaterialTheme.colorScheme.onPrimary,
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+        ) {
+            androidx.compose.material3.Text(
+                "● Listening along",
+                style = MaterialTheme.typography.labelSmall,
+            )
         }
     }
 }

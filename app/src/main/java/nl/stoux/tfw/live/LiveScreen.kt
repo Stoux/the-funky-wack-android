@@ -121,6 +121,13 @@ private fun LiveSessionCard(
                 color = if (isOwnSession) MaterialTheme.colorScheme.primary
                 else MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            if (session.isPaused) {
+                Text(
+                    "Paused",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.tertiary,
+                )
+            }
             if (session.listenersCount > 0) {
                 Text(
                     "${session.listenersCount} listener${if (session.listenersCount != 1) "s" else ""}",

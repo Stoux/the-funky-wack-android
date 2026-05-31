@@ -52,6 +52,18 @@ class ListenAlongCoordinator @Inject constructor(
     val activeRoom: StateFlow<ActiveRoom?> = _activeRoom.asStateFlow()
 
     /**
+     * True while the synced host is paused — listener UI can show a
+     * "Stay in sync / Leave session" prompt. Cleared on host resume,
+     * on leave, or when the user dismisses the prompt.
+     */
+    private val _hostPaused = MutableStateFlow(false)
+    val hostPaused: StateFlow<Boolean> = _hostPaused.asStateFlow()
+
+    fun dismissHostPausedPrompt() {
+        _hostPaused.value = false
+    }
+
+    /**
      * Last-known number of active listen-along sessions. Set by the Live lobby
      * after each refresh and read by the nav drawer to show a badge count.
      */
@@ -96,8 +108,16 @@ class ListenAlongCoordinator @Inject constructor(
                 .onSuccess { state ->
                     val livesetId = state.liveset?.id
                     if (livesetId != null) {
-                        emitHost(HostEvent.TrackChange(livesetId, state.position, state.quality))
+                        emitHost(
+                            HostEvent.TrackChange(
+                                livesetId = livesetId,
+                                position = state.position,
+                                quality = state.quality,
+                                paused = state.isPaused,
+                            )
+                        )
                     }
+                    _hostPaused.value = state.isPaused
                 }
                 .onFailure { Log.w(TAG, "Initial state fetch failed", it) }
         }
@@ -115,6 +135,7 @@ class ListenAlongCoordinator @Inject constructor(
             reverbClient.release()
         }
         _activeRoom.value = null
+        _hostPaused.value = false
     }
 
     /**
@@ -177,8 +198,14 @@ class ListenAlongCoordinator @Inject constructor(
         // Pusher requires presence-channel bindings to be PresenceChannelEventListener
         // instances — a bare lambda would coerce to SubscriptionEventListener and crash.
         channel.bindPresence("host.seek") { event -> handleHostEvent(event, ::parseSeek) }
-        channel.bindPresence("host.pause") { event -> handleHostEvent(event, ::parsePause) }
-        channel.bindPresence("host.resume") { event -> handleHostEvent(event, ::parseResume) }
+        channel.bindPresence("host.pause") { event ->
+            _hostPaused.value = true
+            handleHostEvent(event, ::parsePause)
+        }
+        channel.bindPresence("host.resume") { event ->
+            _hostPaused.value = false
+            handleHostEvent(event, ::parseResume)
+        }
         channel.bindPresence("host.track-change") { event -> handleHostEvent(event, ::parseTrackChange) }
         channel.bindPresence("host.stop") { _ -> emitHost(HostEvent.Stop) }
         channel.bindPresence("listener.joined") { event -> handleListenerJoined(event) }

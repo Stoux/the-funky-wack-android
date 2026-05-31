@@ -129,6 +129,8 @@ class MainActivity : FragmentActivity() {
                 val isLoggedIn by authRepository.isLoggedIn.collectAsState()
                 val currentUser by authRepository.currentUser.collectAsState()
                 val liveSessionCount by listenAlongCoordinator.sessionCount.collectAsState()
+                val activeRoom by listenAlongCoordinator.activeRoom.collectAsState()
+                val hostPaused by listenAlongCoordinator.hostPaused.collectAsState()
 
                 val scaffoldState = rememberBottomSheetScaffoldState()
                 val drawerState = rememberDrawerState(DrawerValue.Closed)
@@ -318,6 +320,27 @@ class MainActivity : FragmentActivity() {
                                 AddToPlaylistDialog(
                                     livesetId = id,
                                     onDismiss = { addToPlaylistLivesetId = null },
+                                )
+                            }
+
+                            if (hostPaused && activeRoom?.mode == "synced") {
+                                AlertDialog(
+                                    onDismissRequest = { listenAlongCoordinator.dismissHostPausedPrompt() },
+                                    title = { Text("Host paused") },
+                                    text = { Text("The host paused the set. Wait for them to resume, or leave the session.") },
+                                    confirmButton = {
+                                        TextButton(onClick = { listenAlongCoordinator.dismissHostPausedPrompt() }) {
+                                            Text("Stay in sync")
+                                        }
+                                    },
+                                    dismissButton = {
+                                        TextButton(onClick = {
+                                            listenAlongCoordinator.dismissHostPausedPrompt()
+                                            scope.launch { listenAlongCoordinator.leave() }
+                                        }) {
+                                            Text("Leave session")
+                                        }
+                                    },
                                 )
                             }
 

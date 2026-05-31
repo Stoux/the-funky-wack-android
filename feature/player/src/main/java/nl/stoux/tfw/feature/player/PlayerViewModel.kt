@@ -65,15 +65,44 @@ class PlayerViewModel @Inject constructor(
         }
     }
 
+    /** True when this controller is mirroring a synced listen-along host. */
+    val isSyncedListening: StateFlow<Boolean> = listenAlongCoordinator.activeRoom
+        .map { it?.mode == "synced" }
+        .stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.Eagerly, false)
+
+    /** Prompt visible when the user tries to seek (or taps the sync badge) while synced. */
+    private val _leaveSyncPrompt = MutableStateFlow(false)
+    val leaveSyncPrompt: StateFlow<Boolean> = _leaveSyncPrompt.asStateFlow()
+
+    fun requestLeaveSyncPrompt() {
+        if (isSyncedListening.value) _leaveSyncPrompt.value = true
+    }
+
+    fun dismissLeaveSyncPrompt() {
+        _leaveSyncPrompt.value = false
+    }
+
+    fun confirmLeaveSync() {
+        _leaveSyncPrompt.value = false
+        viewModelScope.launch { listenAlongCoordinator.leave() }
+    }
+
     private fun handleHostEvent(event: HostEvent) {
         val c = controller ?: return
         when (event) {
             is HostEvent.Seek -> c.seekTo(event.position * 1000)
             is HostEvent.Pause -> c.pause()
             is HostEvent.Resume -> c.play()
-            is HostEvent.TrackChange -> playLiveset(
-                CustomMediaId.from("liveset:${event.livesetId}@${event.position}")
-            )
+            is HostEvent.TrackChange -> viewModelScope.launch {
+                // Honour the host's paused state on initial sync / mid-set joins:
+                // load + seek but don't autoplay. Host's later .host.resume will
+                // flip playWhenReady via the Resume handler above.
+                queueManager.setContextFromLiveset(
+                    livesetId = event.livesetId,
+                    startPositionMs = event.position * 1000L,
+                    autoplay = !event.paused,
+                )
+            }
             HostEvent.Stop -> { /* host ended; keep listener's playback as-is */ }
         }
     }
@@ -373,6 +402,10 @@ class PlayerViewModel @Inject constructor(
     }
 
     fun seekTo(positionMs: Long) {
+        if (isSyncedListening.value) {
+            _leaveSyncPrompt.value = true
+            return
+        }
         controller?.let { c ->
             c.seekTo(c.currentMediaItemIndex, positionMs)
         }
@@ -380,6 +413,10 @@ class PlayerViewModel @Inject constructor(
     }
 
     fun seekToPercent(fraction: Float) {
+        if (isSyncedListening.value) {
+            _leaveSyncPrompt.value = true
+            return
+        }
         val dur = _durationMs.value
         if (dur > 0) {
             val pos = (dur * fraction.coerceIn(0f, 1f)).toLong()

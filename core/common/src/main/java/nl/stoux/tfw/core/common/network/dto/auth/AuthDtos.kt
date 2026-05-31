@@ -234,6 +234,7 @@ data class LiveSessionDto(
     @SerialName("position_updated_at") val positionUpdatedAt: String? = null,
     val quality: String? = null,
     @SerialName("listeners_count") val listenersCount: Int = 0,
+    @SerialName("is_paused") val isPaused: Boolean = false,
 )
 
 @Serializable
