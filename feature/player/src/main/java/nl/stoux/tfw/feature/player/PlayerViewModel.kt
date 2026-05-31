@@ -344,10 +344,18 @@ class PlayerViewModel @Inject constructor(
     }
 
     fun previousLiveset() {
+        if (isSyncedListening.value) {
+            _leaveSyncPrompt.value = true
+            return
+        }
         controller?.seekToPrevious()
     }
 
     fun nextLiveset() {
+        if (isSyncedListening.value) {
+            _leaveSyncPrompt.value = true
+            return
+        }
         // Route through QueueManager to ensure Next works at the end by wrapping appropriately
         viewModelScope.launch {
             queueManager.skipToNext()
@@ -355,10 +363,18 @@ class PlayerViewModel @Inject constructor(
     }
 
     fun skipTrackBackward() {
+        if (isSyncedListening.value) {
+            _leaveSyncPrompt.value = true
+            return
+        }
         controller?.sendCustomCommand(MediaPlaybackService.commandPreviousTrack, bundleOf())
     }
 
     fun skipTrackForward() {
+        if (isSyncedListening.value) {
+            _leaveSyncPrompt.value = true
+            return
+        }
         controller?.sendCustomCommand(MediaPlaybackService.commandNextTrack, bundleOf())
     }
 
