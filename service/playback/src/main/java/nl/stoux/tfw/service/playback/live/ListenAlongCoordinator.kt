@@ -87,6 +87,20 @@ class ListenAlongCoordinator @Inject constructor(
         }
 
         _activeRoom.value = ActiveRoom(channelToken, response.mode)
+
+        // Synced listeners need to jump to the host's current liveset + position
+        // on join. The Reverb subscription only delivers events from *now on*;
+        // mid-set joins would otherwise stay on whatever the listener had loaded.
+        if (response.mode == "synced") {
+            runCatching { api.getLiveRoomState(channelToken) }
+                .onSuccess { state ->
+                    val livesetId = state.liveset?.id
+                    if (livesetId != null) {
+                        emitHost(HostEvent.TrackChange(livesetId, state.position, state.quality))
+                    }
+                }
+                .onFailure { Log.w(TAG, "Initial state fetch failed", it) }
+        }
     }
 
     /**
