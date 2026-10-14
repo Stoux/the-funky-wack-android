@@ -290,8 +290,11 @@ class LivesetTrackManager @Inject constructor(
         // If there are no timestamped tracks for this liveset, ensure base metadata is set and exit
         val hasTimestampedTracks = liveset.tracks.any { it.timestampSec != null }
         if (!hasTimestampedTracks) {
-            // Only update player metadata when NOT casting (CastPlayer has limited replaceMediaItem support)
-            if (!isCasting) {
+            // Only update player metadata when NOT casting (CastPlayer has limited replaceMediaItem support).
+            // Skip when already applied, this runs every progress tick and each update makes Automotive redraw.
+            val alreadyApplied = mediaItem.mediaMetadata.title?.toString() == liveset.liveset.title &&
+                mediaItem.mediaMetadata.artist?.toString() == liveset.liveset.artistName
+            if (!isCasting && !alreadyApplied) {
                 val baseUpdated = mediaItem.buildUpon()
                     .setMediaMetadata(
                         mediaItem.mediaMetadata.buildUpon()
