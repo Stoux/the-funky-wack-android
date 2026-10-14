@@ -21,6 +21,7 @@ import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionResult
 import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.Futures
+import com.google.common.util.concurrent.MoreExecutors
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.SettableFuture
 import dagger.hilt.android.AndroidEntryPoint
@@ -430,6 +431,25 @@ class MediaPlaybackService : MediaLibraryService() {
             }
 
             return Futures.immediateFuture(items)
+        }
+
+        /**
+         * Controllers (Android Auto / Automotive) set items without a start index, so with shuffle on
+         * ExoPlayer would start at a random set. resolveQueue always puts the tapped liveset first.
+         */
+        @OptIn(UnstableApi::class)
+        override fun onSetMediaItems(
+            mediaSession: MediaSession,
+            controller: MediaSession.ControllerInfo,
+            mediaItems: MutableList<MediaItem>,
+            startIndex: Int,
+            startPositionMs: Long,
+        ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> {
+            return Futures.transform(
+                onAddMediaItems(mediaSession, controller, mediaItems),
+                { items -> MediaSession.MediaItemsWithStartPosition(items, 0, startPositionMs) },
+                MoreExecutors.directExecutor(),
+            )
         }
 
         private fun resolveQueue(
