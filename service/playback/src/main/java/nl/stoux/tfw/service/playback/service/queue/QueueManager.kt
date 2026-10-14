@@ -3,8 +3,10 @@ package nl.stoux.tfw.service.playback.service.queue
 import android.os.Looper
 import android.util.Log
 import androidx.media3.common.MediaItem
+import androidx.media3.common.C
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.ShuffleOrder.DefaultShuffleOrder
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -793,9 +795,10 @@ class QueueManager @Inject constructor(
      * livesets (editions sorted by number DESC, same as web) so playback rolls into it.
      */
     private suspend fun appendNextEditionIfAtEnd() {
-        val snapshot = _state.value
-        if (wrapContext || snapshot.effective.isEmpty() || snapshot.currentEffectiveIndex != snapshot.effective.lastIndex) return
-        val lastContextLivesetId = snapshot.context.lastOrNull()?.livesetId ?: return
+        // Ask the player instead of the linear queue index, so shuffle order is respected
+        val player = playerManager.currentPlayer()
+        if (wrapContext || player.mediaItemCount == 0 || player.hasNextMediaItem()) return
+        val lastContextLivesetId = _state.value.context.lastOrNull()?.livesetId ?: return
 
         val next = findNextEditionItems(lastContextLivesetId)
         if (next.isEmpty()) return
@@ -805,9 +808,30 @@ class QueueManager @Inject constructor(
             if (wrapContext || context.lastOrNull()?.livesetId != lastContextLivesetId) return@withLock
             context.addAll(next)
             rebuildEffectiveLocked()
-            playerManager.currentPlayer().addMediaItems(next.map { it.mediaItem })
+            val current = playerManager.currentPlayer()
+            current.addMediaItems(next.map { it.mediaItem })
+            appendToShuffleOrder(current, addedCount = next.size)
             Log.d("QueueManager", "Rolled into next edition: appended ${next.size} livesets")
         }
+    }
+
+    /**
+     * ExoPlayer inserts added items at random spots in its shuffle order, possibly before the current set.
+     * Rebuild the order so the next edition plays (shuffled) after everything that was already queued.
+     */
+    private fun appendToShuffleOrder(player: Player, addedCount: Int) {
+        val exo = player as? ExoPlayer ?: return
+        if (!exo.shuffleModeEnabled) return
+        val timeline = exo.currentTimeline
+        val existingCount = timeline.windowCount - addedCount
+        val order = mutableListOf<Int>()
+        var index = timeline.getFirstWindowIndex(true)
+        while (index != C.INDEX_UNSET) {
+            if (index < existingCount) order.add(index)
+            index = timeline.getNextWindowIndex(index, Player.REPEAT_MODE_OFF, true)
+        }
+        order.addAll((existingCount until timeline.windowCount).shuffled())
+        exo.setShuffleOrder(DefaultShuffleOrder(order.toIntArray(), System.nanoTime()))
     }
 
     private suspend fun findNextEditionItems(livesetId: Long): List<QueueItem> {
