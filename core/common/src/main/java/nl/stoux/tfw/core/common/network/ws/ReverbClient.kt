@@ -9,6 +9,8 @@ import com.pusher.client.channel.Channel
 import com.pusher.client.channel.ChannelEventListener
 import com.pusher.client.channel.PresenceChannel
 import com.pusher.client.channel.PresenceChannelEventListener
+import com.pusher.client.channel.PrivateChannel
+import com.pusher.client.channel.PrivateChannelEventListener
 import com.pusher.client.channel.SubscriptionEventListener
 import com.pusher.client.connection.ConnectionEventListener
 import com.pusher.client.connection.ConnectionStateChange
@@ -123,6 +125,9 @@ class ReverbClient @Inject constructor(
 
     fun subscribePresence(channelName: String, listener: PresenceChannelEventListener): PresenceChannel? =
         pusher?.subscribePresence(channelName, listener)
+
+    fun subscribePrivate(channelName: String, listener: PrivateChannelEventListener, vararg eventNames: String): PrivateChannel? =
+        pusher?.subscribePrivate(channelName, listener, *eventNames)
 
     fun bindEvent(channelName: String, eventName: String, listener: SubscriptionEventListener) {
         pusher?.getChannel(channelName)?.bind(eventName, listener)

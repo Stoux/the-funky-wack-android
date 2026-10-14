@@ -479,10 +479,21 @@ class MainActivity : FragmentActivity() {
     }
 
 
+    override fun onStart() {
+        super.onStart()
+        // New notifications arrive live while the app is visible
+        notificationsRepository.startLive()
+    }
+
     override fun onResume() {
         super.onResume()
         // Cheap poll on app foreground so the unread badge isn't stale
         notificationsRepository.refreshAsync()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        notificationsRepository.stopLive()
     }
 
     override fun onNewIntent(intent: android.content.Intent) {
