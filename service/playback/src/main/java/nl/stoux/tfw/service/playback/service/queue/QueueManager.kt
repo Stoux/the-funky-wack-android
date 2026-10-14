@@ -71,6 +71,10 @@ class QueueManager @Inject constructor(
     private val manual = mutableListOf<QueueItem>()
     private val context = mutableListOf<QueueItem>()
 
+    // Playlist/favorites contexts wrap around; edition contexts roll into the next edition instead
+    @Volatile
+    private var wrapContext = false
+
     // Track the currently bound player for listener management
     private var boundPlayer: Player? = null
 
@@ -115,7 +119,7 @@ class QueueManager @Inject constructor(
         val initialPlayer = playerManager.currentPlayer()
         boundPlayer = initialPlayer
         initialPlayer.addListener(this)
-        initialPlayer.repeatMode = Player.REPEAT_MODE_ALL
+        initialPlayer.repeatMode = repeatMode()
 
         scope.launch {
             playerManager.activePlayer.collect { newPlayer ->
@@ -127,13 +131,15 @@ class QueueManager @Inject constructor(
                     // Attach to new player
                     boundPlayer = newPlayer
                     newPlayer.addListener(this@QueueManager)
-                    newPlayer.repeatMode = Player.REPEAT_MODE_ALL
+                    newPlayer.repeatMode = repeatMode()
 
                     Log.d("QueueManager", "Switched listener to new player: ${newPlayer.javaClass.simpleName}")
                 }
             }
         }
     }
+
+    private fun repeatMode(): Int = if (wrapContext) Player.REPEAT_MODE_ALL else Player.REPEAT_MODE_OFF
 
     // region Public API (minimal)
 
@@ -314,6 +320,7 @@ class QueueManager @Inject constructor(
                 livesetIds.mapNotNull { id -> resolveQueueItem(id, manualEntryId = null) }
             }
             mutex.withLock {
+                wrapContext = true
                 context.clear()
                 context.addAll(resolved)
                 rebuildEffectiveLocked(startLivesetId)
@@ -346,6 +353,7 @@ class QueueManager @Inject constructor(
                 livesetIds.mapNotNull { id -> resolveQueueItem(id, manualEntryId = null) }
             }
             mutex.withLock {
+                wrapContext = true
                 context.clear()
                 context.addAll(resolved)
                 rebuildEffectiveLocked(startLivesetId)
@@ -386,6 +394,7 @@ class QueueManager @Inject constructor(
             // Resolve all items, update effective, and apply
             val resolved = withContext(Dispatchers.IO) { contextLivesetIds.mapNotNull { id -> resolveQueueItem(id, manualEntryId = null) } }
             mutex.withLock {
+                wrapContext = false
                 context.clear()
                 context.addAll(resolved)
                 rebuildEffectiveLocked(livesetId)
@@ -445,6 +454,7 @@ class QueueManager @Inject constructor(
                 contextLivesetIds.mapNotNull { id -> resolveQueueItem(id, manualEntryId = null, quality = castQuality) }
             }
             mutex.withLock {
+                wrapContext = false
                 context.clear()
                 context.addAll(resolved)
                 rebuildEffectiveLocked(livesetId)
@@ -505,15 +515,13 @@ class QueueManager @Inject constructor(
     }
 
     /**
-     * Skip to next item. If currently at the last effective item, wrap according to policy:
-     * - If context lane is non-empty, jump to the first context item (repeat list behavior).
-     * - Otherwise, wrap to the first item (index 0) to ensure the Next button always does something.
+     * Skip to next item. Playlist/favorites contexts wrap (REPEAT_MODE_ALL), edition contexts
+     * already have the next edition appended by the time the last set plays.
      */
     fun skipToNext() {
         scope.launch {
             mutex.withLock {
                 val player = playerManager.currentPlayer() ?: return@withLock
-                // With REPEAT_MODE_ALL, ExoPlayer handles wrapping natively.
                 player.seekToNext()
                 player.playWhenReady = true
             }
@@ -621,6 +629,7 @@ class QueueManager @Inject constructor(
 
         // Update internal state (context lane) without applying to player
         mutex.withLock {
+            wrapContext = false
             context.clear()
             context.addAll(resolved)
             rebuildEffectiveLocked(livesetId)
@@ -754,8 +763,7 @@ class QueueManager @Inject constructor(
                     player.setMediaItems(mediaItems, /* resetPosition = */ false)
                 }
 
-                // Ensure repeat-all so MediaSession transport wraps on Next even at end
-                player.repeatMode = Player.REPEAT_MODE_ALL
+                player.repeatMode = repeatMode()
 
                 // Prepare the new playlist; only auto-play when explicitly requested
                 player.prepare()
@@ -765,7 +773,45 @@ class QueueManager @Inject constructor(
                 // Update state currentEffectiveIndex after applying
                 _state.update { it.copy(currentEffectiveIndex = targetIndex) }
             }
+            appendNextEditionIfAtEnd()
         }
+    }
+
+    /**
+     * When playing the last item of an edition context, append the next edition's playable
+     * livesets (editions sorted by number DESC, same as web) so playback rolls into it.
+     */
+    private suspend fun appendNextEditionIfAtEnd() {
+        val snapshot = _state.value
+        if (wrapContext || snapshot.effective.isEmpty() || snapshot.currentEffectiveIndex != snapshot.effective.lastIndex) return
+        val lastContextLivesetId = snapshot.context.lastOrNull()?.livesetId ?: return
+
+        val next = findNextEditionItems(lastContextLivesetId)
+        if (next.isEmpty()) return
+
+        mutex.withLock {
+            // Another transition may have extended or replaced the context in the meantime
+            if (wrapContext || context.lastOrNull()?.livesetId != lastContextLivesetId) return@withLock
+            context.addAll(next)
+            rebuildEffectiveLocked()
+            playerManager.currentPlayer().addMediaItems(next.map { it.mediaItem })
+            Log.d("QueueManager", "Rolled into next edition: appended ${next.size} livesets")
+        }
+    }
+
+    private suspend fun findNextEditionItems(livesetId: Long): List<QueueItem> {
+        val editionId = withContext(Dispatchers.IO) { editionRepository.findLiveset(livesetId).first() }
+            ?.liveset?.editionId ?: return emptyList()
+        val editions = withContext(Dispatchers.IO) { editionRepository.getEditions().first() }
+        val index = editions.indexOfFirst { it.edition.id == editionId }
+        if (index == -1) return emptyList()
+
+        for (edition in editions.drop(index + 1)) {
+            val livesets = withContext(Dispatchers.IO) { editionRepository.getLivesets(editionId = edition.edition.id).first() }
+            val items = livesets.mapNotNull { resolveQueueItem(it.liveset.id, manualEntryId = null) }
+            if (items.isNotEmpty()) return items
+        }
+        return emptyList()
     }
 
     // region Player.Listener
@@ -808,7 +854,10 @@ class QueueManager @Inject constructor(
                         .takeIf { it >= 0 } ?: 0
 
                 _state.update { it.copy(currentLivesetId = newLivesetId, currentEffectiveIndex = newIndex) }
+                player.repeatMode = repeatMode()
             }
+
+            appendNextEditionIfAtEnd()
 
             // Update actual quality based on the new liveset
             updateActualQuality()
