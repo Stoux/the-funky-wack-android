@@ -825,6 +825,23 @@ class QueueManager @Inject constructor(
         return emptyList()
     }
 
+    /**
+     * Follow a listen-along host's track change. A change for the set that's already loaded
+     * (e.g. the host's session restarted) only resyncs the position instead of rebuilding the context.
+     */
+    fun followHostTrackChange(livesetId: Long, positionMs: Long, play: Boolean) {
+        scope.launch {
+            val player = playerManager.currentPlayer()
+            val loadedLivesetId = player.currentMediaItem?.mediaId?.let { CustomMediaId.fromOrNull(it)?.getLivesetId() }
+            if (loadedLivesetId != livesetId) {
+                setContextFromLiveset(livesetId, startPositionMs = positionMs, autoplay = play)
+                return@launch
+            }
+            player.seekTo(positionMs)
+            if (play) player.playWhenReady = true
+        }
+    }
+
     // region Player.Listener
 
     override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {

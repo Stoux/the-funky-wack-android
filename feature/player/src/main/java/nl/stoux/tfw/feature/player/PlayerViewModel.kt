@@ -93,16 +93,14 @@ class PlayerViewModel @Inject constructor(
             is HostEvent.Seek -> c.seekTo(event.position * 1000)
             is HostEvent.Pause -> c.pause()
             is HostEvent.Resume -> c.play()
-            is HostEvent.TrackChange -> viewModelScope.launch {
-                // Honour the host's paused state on initial sync / mid-set joins:
-                // load + seek but don't autoplay. Host's later .host.resume will
-                // flip playWhenReady via the Resume handler above.
-                queueManager.setContextFromLiveset(
-                    livesetId = event.livesetId,
-                    startPositionMs = event.position * 1000L,
-                    autoplay = !event.paused,
-                )
-            }
+            // Honour the host's paused state on initial sync / mid-set joins:
+            // load + seek but don't autoplay. Host's later .host.resume will
+            // flip playWhenReady via the Resume handler above.
+            is HostEvent.TrackChange -> queueManager.followHostTrackChange(
+                livesetId = event.livesetId,
+                positionMs = event.position * 1000L,
+                play = !event.paused,
+            )
             HostEvent.Stop -> { /* host ended; keep listener's playback as-is */ }
         }
     }

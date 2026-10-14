@@ -63,10 +63,10 @@ class TvNowPlayingViewModel @Inject constructor(
             is HostEvent.Seek -> c?.seekTo(event.position * 1000)
             is HostEvent.Pause -> c?.pause()
             is HostEvent.Resume -> c?.play()
-            is HostEvent.TrackChange -> queueManager.setContextFromLiveset(
+            is HostEvent.TrackChange -> queueManager.followHostTrackChange(
                 livesetId = event.livesetId,
-                startPositionMs = event.position * 1000,
-                autoplay = true,
+                positionMs = event.position * 1000,
+                play = true,
             )
             HostEvent.Stop -> { /* host ended; keep listener's playback as-is */ }
         }
