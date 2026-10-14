@@ -25,6 +25,9 @@ interface ManualQueueDao {
     @Query("DELETE FROM manual_queue_item")
     suspend fun clear()
 
+    @Query("UPDATE manual_queue_item SET orderIndex = :orderIndex WHERE id = :id")
+    suspend fun updateOrderIndex(id: Long, orderIndex: Double)
+
     /**
      * Insert an item next in line using an orderIndex midpoint strategy.
      * Caller provides the computed target orderIndex; this helper just writes it.

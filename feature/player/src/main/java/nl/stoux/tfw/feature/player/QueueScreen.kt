@@ -9,9 +9,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material3.Divider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
@@ -20,22 +22,28 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import nl.stoux.tfw.core.common.repository.EditionRepository
+import nl.stoux.tfw.service.playback.service.queue.QueueItem
 import nl.stoux.tfw.service.playback.service.queue.QueueManager
+import sh.calvin.reorderable.ReorderableItem
+import sh.calvin.reorderable.rememberReorderableLazyListState
 
 /**
- * Queue screen with improved visuals and controls:
- * - Tap an item to play it now.
- * - Section headers for Manual and Up next (no per-row lane labels).
- * - Header includes a repeat-mode toggle (Off → One → Context).
+ * Queue screen:
+ * - Tap an item to play it now, swipe left to remove.
+ * - Upcoming manually queued items (★) can be reordered with the drag handle.
+ * - "Clear" removes all upcoming manually queued items.
  */
 @Composable
 fun QueueScreen(
@@ -44,28 +52,52 @@ fun QueueScreen(
     modifier: Modifier = Modifier,
 ) {
     val state by queueManager.state.collectAsState()
+    val currentInstanceId = state.effective.getOrNull(state.currentEffectiveIndex)?.instanceId
+
+    // Local copy so drags can move rows live; resets to the real queue on every change
+    var items by remember(state.effective) { mutableStateOf(state.effective) }
+    fun isMovable(item: QueueItem): Boolean {
+        val index = items.indexOf(item)
+        val currentIndex = items.indexOfFirst { it.instanceId == currentInstanceId }
+        return item.manualEntryId != null && index > currentIndex
+    }
+
+    val lazyListState = rememberLazyListState()
+    val reorderableState = rememberReorderableLazyListState(lazyListState) { from, to ->
+        val target = items.getOrNull(to.index) ?: return@rememberReorderableLazyListState
+        if (!isMovable(target)) return@rememberReorderableLazyListState
+        items = items.toMutableList().apply { add(to.index, removeAt(from.index)) }
+    }
+
+    val hasUpcomingManual = items.any { isMovable(it) }
 
     Column(modifier = modifier.fillMaxSize()) {
         Row(modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
                 text = "Queue",
                 style = MaterialTheme.typography.headlineSmall,
             )
+            if (hasUpcomingManual) {
+                TextButton(onClick = { queueManager.clearManual() }) {
+                    Text("Clear")
+                }
+            }
         }
         Divider()
-        // Effective queue listing with headers and nicer spacing
-        LazyColumn {
+        LazyColumn(state = lazyListState) {
             // No lane headers; items are interleaved. Just show effective order.
-            itemsIndexed(
-                items = state.effective,
-                key = { _, item -> item.instanceId }
-            ) { index, item ->
-                val isCurrent = index == state.currentEffectiveIndex
+            items(
+                items = items,
+                key = { item -> item.instanceId }
+            ) { item ->
+                val isCurrent = item.instanceId == currentInstanceId
                 val isManual = item.manualEntryId != null
+                val movable = isMovable(item)
                 val containerColor = if (isCurrent) ListItemDefaults.colors(
                     containerColor = MaterialTheme.colorScheme.surfaceVariant
                 ) else ListItemDefaults.colors()
@@ -82,45 +114,65 @@ fun QueueScreen(
                     }
                 )
 
-                SwipeToDismissBox(
-                    state = dismissState,
-                    enableDismissFromStartToEnd = false,
-                    enableDismissFromEndToStart = true,
-                    backgroundContent = {
-                        // Trash icon aligned to the right so it becomes visible early when swiping left
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                        ) {
-                            Icon(
-                                imageVector = Icons.Filled.Delete,
-                                contentDescription = "Remove",
-                                tint = MaterialTheme.colorScheme.error,
+                ReorderableItem(reorderableState, key = item.instanceId) {
+                    SwipeToDismissBox(
+                        state = dismissState,
+                        enableDismissFromStartToEnd = false,
+                        enableDismissFromEndToStart = true,
+                        backgroundContent = {
+                            // Trash icon aligned to the right so it becomes visible early when swiping left
+                            Box(
                                 modifier = Modifier
-                                    .align(Alignment.CenterEnd)
-                                    .padding(end = 20.dp)
+                                    .fillMaxSize()
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.Delete,
+                                    contentDescription = "Remove",
+                                    tint = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier
+                                        .align(Alignment.CenterEnd)
+                                        .padding(end = 20.dp)
+                                )
+                            }
+                        },
+                        content = {
+                            ListItem(
+                                colors = containerColor,
+                                headlineContent = {
+                                    LivesetRowTexts(
+                                        editionRepository = editionRepository,
+                                        livesetId = item.livesetId,
+                                        isCurrent = isCurrent,
+                                        isManual = isManual,
+                                    )
+                                },
+                                trailingContent = if (movable) {
+                                    {
+                                        Icon(
+                                            imageVector = Icons.Filled.DragHandle,
+                                            contentDescription = "Reorder",
+                                            modifier = Modifier.draggableHandle(
+                                                onDragStopped = {
+                                                    // Position within the manual lane = manual items above it
+                                                    val position = items.indexOfFirst { it.instanceId == item.instanceId }
+                                                    val manualIndex = items.take(position).count { it.manualEntryId != null }
+                                                    queueManager.moveManual(item.instanceId, manualIndex)
+                                                }
+                                            ),
+                                        )
+                                    }
+                                } else null,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        val index = state.effective.indexOfFirst { it.instanceId == item.instanceId }
+                                        if (index >= 0) queueManager.skipToEffective(index)
+                                    }
+                                    .padding(horizontal = 4.dp)
                             )
                         }
-                    },
-                    content = {
-                        ListItem(
-                            colors = containerColor,
-                            headlineContent = {
-                                LivesetRowTexts(
-                                    editionRepository = editionRepository,
-                                    livesetId = item.livesetId,
-                                    isCurrent = isCurrent,
-                                    isManual = isManual,
-                                )
-                            },
-                            // Hide reorder button for now: no trailingContent
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { queueManager.skipToEffective(index) }
-                                .padding(horizontal = 4.dp)
-                        )
-                    }
-                )
+                    )
+                }
                 Divider()
             }
         }

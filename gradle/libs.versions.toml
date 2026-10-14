@@ -41,6 +41,8 @@ sentryPlugin = "6.1.0"
 sentryComposeAndroid = "8.33.0"
 securityCrypto = "1.1.0-alpha06"
 pusher = "2.4.4"
+# Drag-to-reorder for LazyColumn
+reorderable = "2.4.3"
 # Plugins
 ksp = "2.2.20-2.0.3"
 media = "1.6.0"
@@ -106,6 +108,8 @@ sentry-compose-android = { group = "io.sentry", name = "sentry-compose-android",
 androidx-security-crypto = { group = "androidx.security", name = "security-crypto", version.ref = "securityCrypto" }
 # Pusher (Laravel Reverb is Pusher-protocol-compatible)
 pusher-java-client = { group = "com.pusher", name = "pusher-java-client", version.ref = "pusher" }
+# Drag-to-reorder
+reorderable = { group = "sh.calvin.reorderable", name = "reorderable", version.ref = "reorderable" }
 # Play In-App Update
 play-app-update = { group = "com.google.android.play", name = "app-update", version.ref = "playAppUpdate" }
 play-app-update-ktx = { group = "com.google.android.play", name = "app-update-ktx", version.ref = "playAppUpdate" }

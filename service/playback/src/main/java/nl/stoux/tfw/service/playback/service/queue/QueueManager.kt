@@ -214,14 +214,59 @@ class QueueManager @Inject constructor(
         }
     }
 
+    /**
+     * Clear the upcoming manual queue. A manual item that's playing right now stays (it's consumed when it ends).
+     */
     fun clearManual() {
         scope.launch {
-            ioScope.launch { manualQueueDao.clear() }
             mutex.withLock {
-                manual.clear()
+                val player = playerManager.currentPlayer()
+                val currentInstanceId = safeCurrentInstanceId()
+                val removed = manual.filter { it.instanceId != currentInstanceId }
+                if (removed.isEmpty()) return@withLock
+                manual.removeAll(removed)
                 rebuildEffectiveLocked()
+                // Remove incrementally to keep playback intact
+                removed.forEach { item ->
+                    val playerIndex = findPlayerIndexByInstanceId(player, item.instanceId)
+                    if (playerIndex >= 0) player.removeMediaItem(playerIndex)
+                }
+                ioScope.launch { removed.forEach { item -> item.manualEntryId?.let { manualQueueDao.deleteById(it) } } }
             }
-            applyToPlayerSafely()
+        }
+    }
+
+    /**
+     * Move a manual item to [toManualIndex] within the manual lane, persist the order and mirror it in the player.
+     */
+    fun moveManual(instanceId: String, toManualIndex: Int) {
+        scope.launch {
+            val reordered = mutex.withLock {
+                val from = manual.indexOfFirst { it.instanceId == instanceId }
+                if (from < 0) return@withLock null
+                val target = toManualIndex.coerceIn(0, manual.lastIndex)
+                if (from == target) return@withLock null
+
+                // Manual items are contiguous in the player, so moving onto the target's index lands it in that slot
+                val player = playerManager.currentPlayer()
+                val fromPlayerIndex = findPlayerIndexByInstanceId(player, instanceId)
+                val targetPlayerIndex = findPlayerIndexByInstanceId(player, manual[target].instanceId)
+
+                manual.add(target, manual.removeAt(from))
+                rebuildEffectiveLocked()
+                if (fromPlayerIndex >= 0 && targetPlayerIndex >= 0) {
+                    player.moveMediaItem(fromPlayerIndex, targetPlayerIndex)
+                } else {
+                    Log.w("QueueManager", "moveManual: item not found in player, playlist not updated")
+                }
+                manual.toList()
+            } ?: return@launch
+
+            ioScope.launch {
+                reordered.forEachIndexed { index, item ->
+                    item.manualEntryId?.let { manualQueueDao.updateOrderIndex(it, (index + 1).toDouble()) }
+                }
+            }
         }
     }
 

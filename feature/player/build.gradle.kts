@@ -42,6 +42,8 @@ dependencies {
     implementation(libs.androidx.compose.material3)
     // Material icons
     implementation(libs.androidx.compose.material.icons.extended)
+    // Drag-to-reorder in the queue
+    implementation(libs.reorderable)
 
     // Image loading for poster
     implementation(libs.coil.compose)
