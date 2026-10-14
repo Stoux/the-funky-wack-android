@@ -4,6 +4,7 @@ import android.os.Looper
 import android.util.Log
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
+import androidx.media3.exoplayer.ExoPlayer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -11,6 +12,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -23,6 +25,7 @@ import nl.stoux.tfw.core.common.repository.EditionRepository
 import nl.stoux.tfw.core.common.repository.FavoritesRepository
 import nl.stoux.tfw.core.common.repository.PlaylistRepository
 import nl.stoux.tfw.service.playback.download.DownloadRepository
+import nl.stoux.tfw.service.playback.live.ListenAlongCoordinator
 import nl.stoux.tfw.service.playback.player.CastToLocalCallback
 import nl.stoux.tfw.service.playback.player.LocalToCastCallback
 import nl.stoux.tfw.service.playback.player.PlayerManager
@@ -46,6 +49,7 @@ class QueueManager @Inject constructor(
     private val downloadRepository: DownloadRepository,
     private val playlistRepository: PlaylistRepository,
     private val favoritesRepository: FavoritesRepository,
+    private val listenAlongCoordinator: ListenAlongCoordinator,
 ) : Player.Listener {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
@@ -136,6 +140,13 @@ class QueueManager @Inject constructor(
                     Log.d("QueueManager", "Switched listener to new player: ${newPlayer.javaClass.simpleName}")
                 }
             }
+        }
+
+        // Synced listen-along listeners hold at the end of a set; the host's track change drives the next one.
+        // Not available on CastPlayer, a casting listener still advances on its own.
+        scope.launch {
+            combine(playerManager.activePlayer, listenAlongCoordinator.followsHost) { player, followsHost -> player to followsHost }
+                .collect { (player, followsHost) -> (player as? ExoPlayer)?.pauseAtEndOfMediaItems = followsHost }
         }
     }
 

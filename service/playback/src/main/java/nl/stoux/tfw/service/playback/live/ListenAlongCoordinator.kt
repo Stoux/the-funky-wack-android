@@ -8,12 +8,14 @@ import com.pusher.client.channel.User
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
@@ -61,6 +63,22 @@ class ListenAlongCoordinator @Inject constructor(
 
     fun dismissHostPausedPrompt() {
         _hostPaused.value = false
+    }
+
+    /**
+     * True while a synced listener paused sync — the host's events are
+     * buffered server-side and the listener plays (and auto-advances) on
+     * their own until [resumeSync].
+     */
+    private val _syncPaused = MutableStateFlow(false)
+    val syncPaused: StateFlow<Boolean> = _syncPaused.asStateFlow()
+
+    /**
+     * True while local playback should follow the host instead of advancing
+     * on its own: synced room and not sync-paused.
+     */
+    val followsHost: Flow<Boolean> = combine(_activeRoom, _syncPaused) { room, paused ->
+        room?.mode == "synced" && !paused
     }
 
     /**
@@ -136,6 +154,7 @@ class ListenAlongCoordinator @Inject constructor(
         }
         _activeRoom.value = null
         _hostPaused.value = false
+        _syncPaused.value = false
     }
 
     /**
@@ -145,6 +164,7 @@ class ListenAlongCoordinator @Inject constructor(
     suspend fun pauseSync() {
         val current = _activeRoom.value ?: return
         if (current.mode != "synced") return
+        _syncPaused.value = true
         runCatching { api.pauseSync(current.channelToken) }
             .onFailure { Log.w(TAG, "pause-sync HTTP failed", it) }
     }
@@ -157,6 +177,7 @@ class ListenAlongCoordinator @Inject constructor(
     suspend fun resumeSync() {
         val current = _activeRoom.value ?: return
         if (current.mode != "synced") return
+        _syncPaused.value = false
         runCatching { api.resumeSync(current.channelToken) }
             .onFailure { Log.w(TAG, "resume-sync HTTP failed", it) }
     }
@@ -184,6 +205,7 @@ class ListenAlongCoordinator @Inject constructor(
             .onFailure { Log.w(TAG, "detach HTTP failed", it) }
             .getOrNull() ?: return null
         reverbClient.unsubscribe(channelName(current.channelToken))
+        _syncPaused.value = false
         _activeRoom.value = ActiveRoom(current.channelToken, mode = "independent")
         return response.newRoomToken
     }
