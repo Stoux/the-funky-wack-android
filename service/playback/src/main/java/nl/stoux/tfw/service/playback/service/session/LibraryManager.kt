@@ -12,6 +12,9 @@ import androidx.media3.common.MediaMetadata
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 import nl.stoux.tfw.core.common.auth.AuthRepository
 import nl.stoux.tfw.core.common.database.dao.EditionWithContent
@@ -60,6 +63,25 @@ class LibraryManager @Inject constructor(
     private var isRefreshing: Boolean = false
     private var refreshState: RefreshState = RefreshState.IDLE
     var childrenChangedCallback: LibraryChildrenChangedCallback? = null
+
+    init {
+        // Browse screens opened before or during an editions refresh would otherwise keep showing stale data
+        CoroutineScope(SupervisorJob() + Dispatchers.Default).launch {
+            editionRepository.cachedEditions
+                .drop(1)
+                .distinctUntilChanged()
+                .collect { editions -> notifyCatalogChanged(editions) }
+        }
+    }
+
+    private fun notifyCatalogChanged(editions: List<EditionWithContent>) {
+        val callback = childrenChangedCallback ?: return
+        callback.onChildrenChanged(CustomMediaId.ROOT_EDITIONS.original, editions.size)
+        callback.onChildrenChanged(CustomMediaId.ROOT_LIVESETS.original, editions.sumOf { it.livesets.size })
+        editions.forEach { ed ->
+            callback.onChildrenChanged("edition:${ed.edition.id}", ed.livesets.size)
+        }
+    }
 
     suspend fun init() {
         if (isRefreshing) return
