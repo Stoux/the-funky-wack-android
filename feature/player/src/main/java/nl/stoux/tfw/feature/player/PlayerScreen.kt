@@ -64,7 +64,12 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.google.android.gms.cast.framework.CastButtonFactory
@@ -166,8 +171,29 @@ fun PlayerScreen(
         }
 
 
+        // Once a gesture has scrolled the content back up, don't hand the leftover drag/fling to the
+        // bottom sheet (that closed the player when hitting the top). A fresh drag from the top still closes it.
+        val keepSheetOpenConnection = remember {
+            object : NestedScrollConnection {
+                var scrolledThisGesture = false
+
+                override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+                    if (consumed.y != 0f) scrolledThisGesture = true
+                    return if (scrolledThisGesture && available.y > 0f) Offset(0f, available.y) else Offset.Zero
+                }
+
+                override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
+                    val keep = scrolledThisGesture && available.y > 0f
+                    scrolledThisGesture = false
+                    return if (keep) Velocity(0f, available.y) else Velocity.Zero
+                }
+            }
+        }
+
         Column(
-            modifier = Modifier.verticalScroll(scrollState)
+            modifier = Modifier
+                .nestedScroll(keepSheetOpenConnection)
+                .verticalScroll(scrollState)
         ) {
 
             Box(
