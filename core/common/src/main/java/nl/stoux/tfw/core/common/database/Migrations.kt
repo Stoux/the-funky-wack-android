@@ -135,5 +135,15 @@ object Migrations {
         }
     }
 
-    val ALL_MIGRATIONS = arrayOf(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
+    /**
+     * Migration from version 9 to 10:
+     * - Add comments count to livesets (filled on the next editions refresh)
+     */
+    val MIGRATION_9_10 = object : Migration(9, 10) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE livesets ADD COLUMN commentsCount INTEGER DEFAULT NULL")
+        }
+    }
+
+    val ALL_MIGRATIONS = arrayOf(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10)
 }

@@ -1,6 +1,13 @@
 package nl.stoux.tfw.core.common.network
 
+import nl.stoux.tfw.core.common.network.dto.CommentWrapper
+import nl.stoux.tfw.core.common.network.dto.CommentsListResponse
+import nl.stoux.tfw.core.common.network.dto.CreateCommentRequest
 import nl.stoux.tfw.core.common.network.dto.EditionDto
+import nl.stoux.tfw.core.common.network.dto.MessageResponse
+import nl.stoux.tfw.core.common.network.dto.NotificationsListResponse
+import nl.stoux.tfw.core.common.network.dto.RecentCommentsResponse
+import nl.stoux.tfw.core.common.network.dto.UpdateCommentRequest
 import nl.stoux.tfw.core.common.network.dto.auth.AddPlaylistItemRequest
 import nl.stoux.tfw.core.common.network.dto.auth.AuthResponse
 import nl.stoux.tfw.core.common.network.dto.auth.BroadcastAuthRequest
@@ -40,6 +47,7 @@ import retrofit2.http.GET
 import retrofit2.http.POST
 import retrofit2.http.PUT
 import retrofit2.http.Path
+import retrofit2.http.Query
 
 interface ApiService {
     /**
@@ -208,4 +216,42 @@ interface ApiService {
 
     @POST("invites")
     suspend fun createInvite(): InviteResponse
+
+    // --- Comments ---
+
+    /** Top-level comments with replies. [sort] null = timestamp asc, "date" = created_at asc. */
+    @GET("livesets/{livesetId}/comments")
+    suspend fun getComments(
+        @Path("livesetId") livesetId: Long,
+        @Query("sort") sort: String? = null,
+    ): CommentsListResponse
+
+    @GET("comments/recent")
+    suspend fun getRecentComments(): RecentCommentsResponse
+
+    @POST("livesets/{livesetId}/comments")
+    suspend fun createComment(
+        @Path("livesetId") livesetId: Long,
+        @Body request: CreateCommentRequest,
+    ): CommentWrapper
+
+    @PUT("comments/{commentId}")
+    suspend fun updateComment(
+        @Path("commentId") commentId: Long,
+        @Body request: UpdateCommentRequest,
+    ): CommentWrapper
+
+    @DELETE("comments/{commentId}")
+    suspend fun deleteComment(@Path("commentId") commentId: Long): MessageResponse
+
+    // --- Notifications ---
+
+    @GET("notifications")
+    suspend fun getNotifications(): NotificationsListResponse
+
+    @PUT("notifications/{id}/read")
+    suspend fun markNotificationRead(@Path("id") id: String): MessageResponse
+
+    @PUT("notifications/read-all")
+    suspend fun markAllNotificationsRead(): MessageResponse
 }

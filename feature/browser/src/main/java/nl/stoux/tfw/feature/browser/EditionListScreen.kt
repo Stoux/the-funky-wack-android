@@ -146,6 +146,7 @@ private fun EditionList(
                     genre = lwd.liveset.genre,
                     bpm = lwd.liveset.bpm,
                     durationSec = lwd.liveset.durationSeconds,
+                    commentsCount = lwd.liveset.commentsCount ?: 0,
                     isPlayable = listOfNotNull(lwd.liveset.losslessUrl, lwd.liveset.hqUrl, lwd.liveset.lqUrl).isNotEmpty(),
                     downloadStatus = downloadStatus,
                     onPlay = {
@@ -324,6 +325,7 @@ private fun LivesetRow(
     genre: String?,
     bpm: String?,
     durationSec: Int?,
+    commentsCount: Int,
     isPlayable: Boolean,
     downloadStatus: DownloadStatus,
     onPlay: () -> Unit,
@@ -366,7 +368,11 @@ private fun LivesetRow(
                 overflow = TextOverflow.Ellipsis,
             )
             Text(text = artist, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            val meta = listOfNotNull(genre, bpm?.let { "${it} BPM" }).joinToString(" · ")
+            val meta = listOfNotNull(
+                genre,
+                bpm?.let { "${it} BPM" },
+                commentsCount.takeIf { it > 0 }?.let { if (it == 1) "1 comment" else "$it comments" },
+            ).joinToString(" · ")
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp)

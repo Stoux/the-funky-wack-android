@@ -30,7 +30,7 @@ import nl.stoux.tfw.core.common.database.entity.TrackEntity
         PlaylistItemEntity::class,
         PlaybackPositionEntity::class,
     ],
-    version = 9,
+    version = 10,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {

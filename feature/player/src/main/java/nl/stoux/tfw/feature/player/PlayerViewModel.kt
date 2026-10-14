@@ -43,6 +43,10 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import nl.stoux.tfw.core.common.repository.EditionRepository
 
 @HiltViewModel
 class PlayerViewModel @Inject constructor(
@@ -54,6 +58,7 @@ class PlayerViewModel @Inject constructor(
     private val downloadRepository: DownloadRepository,
     private val playerManager: PlayerManager,
     private val listenAlongCoordinator: ListenAlongCoordinator,
+    private val editionRepository: EditionRepository,
 ) : ViewModel() {
 
     init {
@@ -406,6 +411,7 @@ class PlayerViewModel @Inject constructor(
     val queueOpenRequests: StateFlow<Int> = _queueOpenRequests.asStateFlow()
 
     fun openQueue() {
+        _showComments.value = false
         _showQueue.value = true
         // Increment to signal a new open request even if already open
         _queueOpenRequests.value = _queueOpenRequests.value + 1
@@ -414,6 +420,34 @@ class PlayerViewModel @Inject constructor(
     fun closeQueue() {
         _showQueue.value = false
     }
+
+    // Comments for the current liveset; shown in the main content area like the queue
+    private val _showComments = MutableStateFlow(false)
+    val showComments: StateFlow<Boolean> = _showComments.asStateFlow()
+
+    private val _commentsOpenRequests = MutableStateFlow(0)
+    val commentsOpenRequests: StateFlow<Int> = _commentsOpenRequests.asStateFlow()
+
+    fun openComments() {
+        _showQueue.value = false
+        _showComments.value = true
+        _commentsOpenRequests.value = _commentsOpenRequests.value + 1
+    }
+
+    fun closeComments() {
+        _showComments.value = false
+    }
+
+    /** Live comments count for the current liveset (Room-backed, updated when comments load). */
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val currentCommentsCount: StateFlow<Int> = _currentLiveset
+        .map { it?.liveset?.id }
+        .distinctUntilChanged()
+        .flatMapLatest { id ->
+            if (id == null) flowOf(0)
+            else editionRepository.findLiveset(id).map { it?.liveset?.commentsCount ?: 0 }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
     fun onCloseRequested() {
         // TODO: Hook to navigation back

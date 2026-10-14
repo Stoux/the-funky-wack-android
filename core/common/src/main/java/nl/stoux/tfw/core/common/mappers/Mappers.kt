@@ -49,6 +49,7 @@ fun LivesetDto.toLivesetEntity(): LivesetEntity = LivesetEntity(
     playsCount = plays_count,
     favoritesCount = favorites_count,
     isFavorited = is_favorited,
+    commentsCount = comments_count,
 )
 
 fun LivesetTrackDto.toTrackEntity(): TrackEntity = TrackEntity(

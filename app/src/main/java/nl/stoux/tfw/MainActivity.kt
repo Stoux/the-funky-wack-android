@@ -55,6 +55,12 @@ import nl.stoux.tfw.feature.browser.EditionListViewModel
 import nl.stoux.tfw.feature.player.PlayerScreen
 import nl.stoux.tfw.feature.player.PlayerViewModel
 import nl.stoux.tfw.live.LiveScreen
+import nl.stoux.tfw.notifications.NotificationsScreen
+import nl.stoux.tfw.feature.player.comments.CommentsScreen
+import nl.stoux.tfw.feature.player.comments.CommentsViewModel
+import nl.stoux.tfw.core.common.repository.NotificationsRepository
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import nl.stoux.tfw.navigation.AppDrawerContent
 import nl.stoux.tfw.navigation.AppScreen
 import nl.stoux.tfw.playlists.AddToPlaylistDialog
@@ -87,8 +93,10 @@ class MainActivity : FragmentActivity() {
     private val listViewModel: EditionListViewModel by viewModels()
     private val playerViewModel: PlayerViewModel by viewModels()
     private val appLinkViewModel: AppLinkViewModel by viewModels()
+    private val commentsViewModel: CommentsViewModel by viewModels()
 
     @Inject lateinit var queueManager: QueueManager
+    @Inject lateinit var notificationsRepository: NotificationsRepository
     @Inject lateinit var editionRepository: EditionRepository
     @Inject lateinit var authRepository: AuthRepository
     @Inject lateinit var listenAlongCoordinator: ListenAlongCoordinator
@@ -131,6 +139,7 @@ class MainActivity : FragmentActivity() {
                 val liveSessionCount by listenAlongCoordinator.sessionCount.collectAsState()
                 val activeRoom by listenAlongCoordinator.activeRoom.collectAsState()
                 val hostPaused by listenAlongCoordinator.hostPaused.collectAsState()
+                val unreadNotificationCount by notificationsRepository.unreadCount.collectAsState()
 
                 val scaffoldState = rememberBottomSheetScaffoldState()
                 val drawerState = rememberDrawerState(DrawerValue.Closed)
@@ -171,6 +180,18 @@ class MainActivity : FragmentActivity() {
                     currentScreen = AppScreen.Browse
                 }
 
+                // Poll notifications whenever the drawer opens (no push yet)
+                LaunchedEffect(drawerState.isOpen) {
+                    if (drawerState.isOpen) notificationsRepository.refreshAsync()
+                }
+
+                // Notifications are login-only; bounce back to Browse on logout
+                LaunchedEffect(isLoggedIn) {
+                    if (!isLoggedIn && currentScreen == AppScreen.Notifications) {
+                        currentScreen = AppScreen.Browse
+                    }
+                }
+
                 // Deep link resolved state from ViewModel
                 val resolvedDeepLinkState by appLinkViewModel.resolved.collectAsState(initial = null)
 
@@ -182,8 +203,10 @@ class MainActivity : FragmentActivity() {
                             isLoggedIn = isLoggedIn,
                             userName = currentUser?.name,
                             liveSessionCount = liveSessionCount,
+                            unreadNotificationCount = unreadNotificationCount,
                             onScreenSelected = { screen ->
                                 currentScreen = screen
+                                playerViewModel.closeComments()
                                 scope.launch { drawerState.close() }
                             },
                         )
@@ -203,7 +226,11 @@ class MainActivity : FragmentActivity() {
                                             drawerState.open()
                                         }
                                     }) {
-                                        Icon(Icons.Default.Menu, contentDescription = "Menu")
+                                        BadgedBox(
+                                            badge = { if (unreadNotificationCount > 0) Badge() }
+                                        ) {
+                                            Icon(Icons.Default.Menu, contentDescription = "Menu")
+                                        }
                                     }
                                 },
                                 title = {
@@ -265,12 +292,35 @@ class MainActivity : FragmentActivity() {
                             // Back should close the player first; only close queue if player isn't open
                             BackHandler(enabled = showQueue && !playerIsOpen) { playerViewModel.closeQueue() }
 
+                            // Comments behave like the queue: opening them collapses the player sheet
+                            val showComments by playerViewModel.showComments.collectAsState()
+                            val commentsOpenRequests by playerViewModel.commentsOpenRequests.collectAsState()
+                            LaunchedEffect(commentsOpenRequests) {
+                                if (showComments) {
+                                    scope.launch { scaffoldState.bottomSheetState.partialExpand() }
+                                }
+                            }
+                            BackHandler(enabled = showComments && !playerIsOpen && !drawerState.isOpen) {
+                                playerViewModel.closeComments()
+                            }
+
                             androidx.compose.foundation.layout.Box(modifier = Modifier.weight(1f)) {
                                 if (showQueue) {
                                     nl.stoux.tfw.feature.player.QueueScreen(
                                         queueManager = queueManager,
                                         editionRepository = editionRepository,
                                         modifier = Modifier.fillMaxSize()
+                                    )
+                                } else if (showComments) {
+                                    CommentsScreen(
+                                        playerViewModel = playerViewModel,
+                                        viewModel = commentsViewModel,
+                                        onClose = { playerViewModel.closeComments() },
+                                        onLoginRequested = {
+                                            playerViewModel.closeComments()
+                                            currentScreen = AppScreen.Account
+                                        },
+                                        modifier = Modifier.fillMaxSize(),
                                     )
                                 } else {
                                     when (currentScreen) {
@@ -298,6 +348,9 @@ class MainActivity : FragmentActivity() {
                                         )
                                         AppScreen.Playlists -> PlaylistsScreen(
                                             onPlayClicked = { mediaId -> playerViewModel.playLiveset(CustomMediaId.from(mediaId)) },
+                                        )
+                                        AppScreen.Notifications -> NotificationsScreen(
+                                            onOpenPlayer = { scope.launch { scaffoldState.bottomSheetState.expand() } },
                                         )
                                         AppScreen.Live -> LiveScreen()
                                         AppScreen.Devices -> DevicesScreen()
@@ -425,6 +478,12 @@ class MainActivity : FragmentActivity() {
         return false
     }
 
+
+    override fun onResume() {
+        super.onResume()
+        // Cheap poll on app foreground so the unread badge isn't stale
+        notificationsRepository.refreshAsync()
+    }
 
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)

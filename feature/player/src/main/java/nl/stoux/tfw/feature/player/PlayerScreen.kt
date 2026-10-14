@@ -20,6 +20,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
+import androidx.compose.material.icons.automirrored.outlined.Comment
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material.icons.filled.Cast
 import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.FastRewind
@@ -625,6 +628,29 @@ fun PlayerControls(
                             style = MaterialTheme.typography.labelMedium,
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)
                         )
+                    }
+
+                    if (liveset != null) {
+                        val commentsCount by viewModel.currentCommentsCount.collectAsState()
+                        IconButton(onClick = { viewModel.openComments() }) {
+                            BadgedBox(
+                                badge = {
+                                    if (commentsCount > 0) {
+                                        Badge(
+                                            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                            contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        ) {
+                                            Text(if (commentsCount > 99) "99+" else commentsCount.toString())
+                                        }
+                                    }
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Outlined.Comment,
+                                    contentDescription = "Comments",
+                                )
+                            }
+                        }
                     }
 
                     IconButton(onClick = { viewModel.openQueue() }) {

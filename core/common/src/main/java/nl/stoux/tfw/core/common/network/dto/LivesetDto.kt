@@ -33,6 +33,7 @@ data class LivesetDto(
     // Social/stats fields from updated API
     val plays_count: Int? = null,
     val favorites_count: Int? = null,
+    val comments_count: Int? = null,
     val is_favorited: Boolean? = null,
 )
 

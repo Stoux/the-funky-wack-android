@@ -78,6 +78,9 @@ interface EditionDao {
     @Upsert
     suspend fun upsertTracks(items: List<TrackEntity>)
 
+    @Query("UPDATE livesets SET commentsCount = :count WHERE id = :livesetId")
+    suspend fun updateCommentsCount(livesetId: Long, count: Int)
+
     // Clears (order matters due to FKs)
     @Query("DELETE FROM tracks")
     suspend fun clearTracks()

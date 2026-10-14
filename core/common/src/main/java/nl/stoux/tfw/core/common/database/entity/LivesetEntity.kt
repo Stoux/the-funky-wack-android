@@ -45,4 +45,6 @@ data class LivesetEntity(
     val playsCount: Int? = null,
     val favoritesCount: Int? = null,
     val isFavorited: Boolean? = null,
+    /** Non-deleted comments incl. replies (server `comments_count`). */
+    val commentsCount: Int? = null,
 )

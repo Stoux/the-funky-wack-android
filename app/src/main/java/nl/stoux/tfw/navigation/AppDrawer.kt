@@ -9,6 +9,7 @@ import androidx.compose.material.icons.filled.Devices
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.MailOutline
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
 import androidx.compose.material.icons.filled.Settings
@@ -26,6 +27,7 @@ import androidx.compose.ui.unit.dp
 enum class AppScreen(val title: String, val icon: ImageVector) {
     Browse("Browse", Icons.Default.Album),
     Favorites("Favorites", Icons.Default.Favorite),
+    Notifications("Notifications", Icons.Default.Notifications),
     Playlists("Playlists", Icons.AutoMirrored.Filled.PlaylistPlay),
     Live("Live", Icons.Default.LiveTv),
     Devices("Devices", Icons.Default.Devices),
@@ -40,6 +42,7 @@ fun AppDrawerContent(
     isLoggedIn: Boolean,
     userName: String?,
     liveSessionCount: Int,
+    unreadNotificationCount: Int,
     onScreenSelected: (AppScreen) -> Unit,
 ) {
     ModalDrawerSheet {
@@ -65,6 +68,19 @@ fun AppDrawerContent(
                 label = { Text(AppScreen.Favorites.title) },
                 selected = currentScreen == AppScreen.Favorites,
                 onClick = { onScreenSelected(AppScreen.Favorites) },
+                modifier = Modifier.padding(horizontal = 12.dp),
+            )
+            NavigationDrawerItem(
+                icon = { Icon(AppScreen.Notifications.icon, contentDescription = null) },
+                label = {
+                    if (unreadNotificationCount > 0) {
+                        Text("${AppScreen.Notifications.title} ($unreadNotificationCount)")
+                    } else {
+                        Text(AppScreen.Notifications.title)
+                    }
+                },
+                selected = currentScreen == AppScreen.Notifications,
+                onClick = { onScreenSelected(AppScreen.Notifications) },
                 modifier = Modifier.padding(horizontal = 12.dp),
             )
         }

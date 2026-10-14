@@ -71,7 +71,11 @@ fun LivesetListItem(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            val meta = listOfNotNull(liveset.genre, liveset.bpm?.let { "$it BPM" }).joinToString(" · ")
+            val meta = listOfNotNull(
+                liveset.genre,
+                liveset.bpm?.let { "$it BPM" },
+                liveset.commentsCount?.takeIf { it > 0 }?.let { if (it == 1) "1 comment" else "$it comments" },
+            ).joinToString(" · ")
             if (meta.isNotBlank()) {
                 Text(
                     meta,
