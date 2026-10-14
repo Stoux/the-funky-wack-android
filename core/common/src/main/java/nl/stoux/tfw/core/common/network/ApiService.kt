@@ -44,6 +44,7 @@ import nl.stoux.tfw.core.common.network.dto.auth.VisibilitySettingRequest
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
+import retrofit2.http.Header
 import retrofit2.http.POST
 import retrofit2.http.PUT
 import retrofit2.http.Path
@@ -229,20 +230,27 @@ interface ApiService {
     @GET("comments/recent")
     suspend fun getRecentComments(): RecentCommentsResponse
 
+    // X-Socket-ID (our Reverb socket, when connected) makes the server skip us when broadcasting the change
+
     @POST("livesets/{livesetId}/comments")
     suspend fun createComment(
         @Path("livesetId") livesetId: Long,
         @Body request: CreateCommentRequest,
+        @Header("X-Socket-ID") socketId: String? = null,
     ): CommentWrapper
 
     @PUT("comments/{commentId}")
     suspend fun updateComment(
         @Path("commentId") commentId: Long,
         @Body request: UpdateCommentRequest,
+        @Header("X-Socket-ID") socketId: String? = null,
     ): CommentWrapper
 
     @DELETE("comments/{commentId}")
-    suspend fun deleteComment(@Path("commentId") commentId: Long): MessageResponse
+    suspend fun deleteComment(
+        @Path("commentId") commentId: Long,
+        @Header("X-Socket-ID") socketId: String? = null,
+    ): MessageResponse
 
     // --- Notifications ---
 

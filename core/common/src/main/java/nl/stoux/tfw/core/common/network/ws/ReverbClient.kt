@@ -52,6 +52,10 @@ class ReverbClient @Inject constructor(
 
     @Volatile private var pusher: Pusher? = null
 
+    /** Our socket id while connected; sent as X-Socket-ID so broadcasts can skip us (Laravel's toOthers). */
+    val socketId: String?
+        get() = pusher?.connection?.socketId
+
     /**
      * Ref-counted consumers — each [acquire] must be matched by exactly one
      * [release]. The underlying Pusher connection opens on the first acquire
@@ -120,8 +124,8 @@ class ReverbClient @Inject constructor(
         _state.value = ReverbConnectionState.DISCONNECTED
     }
 
-    fun subscribe(channelName: String, listener: ChannelEventListener): Channel? =
-        pusher?.subscribe(channelName, listener)
+    fun subscribe(channelName: String, listener: ChannelEventListener, vararg eventNames: String): Channel? =
+        pusher?.subscribe(channelName, listener, *eventNames)
 
     fun subscribePresence(channelName: String, listener: PresenceChannelEventListener): PresenceChannel? =
         pusher?.subscribePresence(channelName, listener)

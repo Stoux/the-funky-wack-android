@@ -250,9 +250,11 @@ class MainActivity : FragmentActivity() {
                             )
                         },
                         sheetContent = {
+                            val commentBubble by commentsViewModel.bubble.collectAsState()
                             PlayerScreen(
                                 viewModel = playerViewModel,
                                 isOpen = playerIsOpen,
+                                commentBubble = commentBubble,
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .navigationBarsPadding()
@@ -481,8 +483,9 @@ class MainActivity : FragmentActivity() {
 
     override fun onStart() {
         super.onStart()
-        // New notifications arrive live while the app is visible
+        // New notifications and comments arrive live while the app is visible
         notificationsRepository.startLive()
+        commentsViewModel.setLive(true)
     }
 
     override fun onResume() {
@@ -494,6 +497,7 @@ class MainActivity : FragmentActivity() {
     override fun onStop() {
         super.onStop()
         notificationsRepository.stopLive()
+        commentsViewModel.setLive(false)
     }
 
     override fun onNewIntent(intent: android.content.Intent) {

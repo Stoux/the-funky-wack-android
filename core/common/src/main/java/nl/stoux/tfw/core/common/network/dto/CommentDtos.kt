@@ -22,11 +22,37 @@ data class CommentDto(
     val body: String? = null,
     @SerialName("is_deleted") val isDeleted: Boolean = false,
     @SerialName("timestamp_seconds") val timestampSeconds: Int = 0,
+    @SerialName("parent_id") val parentId: Long? = null,
     @SerialName("created_at") val createdAt: String? = null,
     @SerialName("updated_at") val updatedAt: String? = null,
     @SerialName("is_own") val isOwn: Boolean = false,
     val replies: List<CommentDto>? = null,
 )
+
+/**
+ * Payload of the realtime `comment.posted` / `.updated` / `.deleted` / `.restored` events on the
+ * public `comments.liveset.{id}` channel: a [CommentDto] plus [parentId], without `is_own` and replies.
+ */
+@Serializable
+data class LiveCommentDto(
+    val id: Long,
+    val user: CommentUserDto? = null,
+    val body: String? = null,
+    @SerialName("is_deleted") val isDeleted: Boolean = false,
+    @SerialName("timestamp_seconds") val timestampSeconds: Int = 0,
+    @SerialName("parent_id") val parentId: Long? = null,
+    @SerialName("created_at") val createdAt: String? = null,
+    @SerialName("updated_at") val updatedAt: String? = null,
+)
+
+sealed interface CommentLiveEvent {
+    val comment: LiveCommentDto
+
+    data class Posted(override val comment: LiveCommentDto) : CommentLiveEvent
+    data class Updated(override val comment: LiveCommentDto) : CommentLiveEvent
+    data class Deleted(override val comment: LiveCommentDto) : CommentLiveEvent
+    data class Restored(override val comment: LiveCommentDto) : CommentLiveEvent
+}
 
 @Serializable
 data class CommentsListResponse(
@@ -64,8 +90,11 @@ data class RecentCommentDto(
     val user: CommentUserDto? = null,
     val liveset: RecentCommentLivesetDto? = null,
     val body: String? = null,
+    @SerialName("is_deleted") val isDeleted: Boolean = false,
     @SerialName("timestamp_seconds") val timestampSeconds: Int = 0,
+    @SerialName("parent_id") val parentId: Long? = null,
     @SerialName("created_at") val createdAt: String? = null,
+    @SerialName("updated_at") val updatedAt: String? = null,
 )
 
 @Serializable

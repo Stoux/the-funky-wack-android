@@ -1,5 +1,7 @@
 package nl.stoux.tfw.feature.player
 
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.keyframes
@@ -82,6 +84,7 @@ import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import nl.stoux.tfw.core.common.database.entity.TrackEntity
+import nl.stoux.tfw.core.common.network.dto.LiveCommentDto
 import nl.stoux.tfw.core.common.database.entity.artworkUrl
 import nl.stoux.tfw.feature.player.util.formatTime
 import nl.stoux.tfw.feature.player.util.shareLiveset
@@ -98,6 +101,7 @@ fun PlayerScreen(
     modifier: Modifier = Modifier,
     onCloseRequested: () -> Unit = {},
     onGoFullScreen: () -> Unit = {},
+    commentBubble: LiveCommentDto? = null,
 ) {
     // Collect state
     val liveset by viewModel.currentLiveset.collectAsState()
@@ -218,6 +222,7 @@ fun PlayerScreen(
                     viewModel = viewModel,
                     boxPadding = boxPadding,
                     showDetails = showDetails,
+                    commentBubble = commentBubble,
                     onScrollDown = {
                         uiScope.launch {
                             onGoFullScreen()
@@ -345,11 +350,36 @@ fun CastAction(modifier: Modifier = Modifier) {
 }
 
 @Composable
+private fun CommentBubble(comment: LiveCommentDto, onClick: () -> Unit) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.92f),
+        tonalElevation = 4.dp,
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+            Text(
+                text = "${comment.user?.name ?: "Someone"} · ${formatTime(comment.timestampSeconds * 1000L)}",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            Text(
+                text = comment.body.orEmpty(),
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+@Composable
 fun PlayerControls(
     viewModel: PlayerViewModel,
     boxPadding: Dp,
     showDetails: Boolean,
     onScrollDown: () -> Unit,
+    commentBubble: LiveCommentDto? = null,
 ) {
     val liveset by viewModel.currentLiveset.collectAsState()
 
@@ -479,6 +509,21 @@ fun PlayerControls(
                             .padding(horizontal = 8.dp, vertical = 8.dp)
                     )
                 }
+            }
+
+            // Someone else just commented on this set: show it briefly, tap to open the comments
+            var lastBubble by remember { mutableStateOf(commentBubble) }
+            if (commentBubble != null) lastBubble = commentBubble
+            // Qualified: the enclosing Column's scope would otherwise pick the ColumnScope overload
+            androidx.compose.animation.AnimatedVisibility(
+                visible = commentBubble != null,
+                enter = fadeIn(),
+                exit = fadeOut(),
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(horizontal = boxPadding, vertical = 8.dp),
+            ) {
+                lastBubble?.let { bubble -> CommentBubble(bubble, onClick = { viewModel.openComments() }) }
             }
         }
 
