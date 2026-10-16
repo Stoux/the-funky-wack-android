@@ -138,7 +138,7 @@ fun TvNavHost() {
         }
 
         composable<TvDestination.Devices> {
-            TvDevicesScreen()
+            TvDevicesScreen(onBack = { navController.popBackStack() })
         }
 
         composable<TvDestination.Notifications> {

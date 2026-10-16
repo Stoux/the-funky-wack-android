@@ -1,6 +1,7 @@
 package nl.stoux.tfw.tv.ui.playlists
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -43,6 +44,8 @@ import nl.stoux.tfw.core.common.repository.EditionRepository
 import nl.stoux.tfw.core.common.repository.PlaylistRepository
 import nl.stoux.tfw.service.playback.service.queue.QueueManager
 import nl.stoux.tfw.tv.ui.browse.LivesetListItem
+import nl.stoux.tfw.tv.ui.common.TvEmptyState
+import nl.stoux.tfw.tv.ui.common.TvScreenScaffold
 import javax.inject.Inject
 
 /** Either a fully-cached liveset (with edition + tracks) or just the playlist preview. */
@@ -103,28 +106,20 @@ fun TvPlaylistDetailScreen(
     val playlist by viewModel.playlist.collectAsState()
     val rows by viewModel.rows.collectAsState()
 
-    Column(modifier = Modifier.fillMaxSize().padding(48.dp)) {
-        val p = playlist
+    val p = playlist
+    TvScreenScaffold(
+        title = p?.name ?: "Playlist",
+        subtitle = p?.description?.takeIf { it.isNotBlank() },
+        onBack = onBack,
+    ) {
         if (p == null) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("Loading…", style = MaterialTheme.typography.bodyLarge)
-            }
-            return
-        }
-
-        Text(p.name, style = MaterialTheme.typography.displaySmall)
-        p.description?.let {
-            Text(it, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        Spacer(modifier = Modifier.height(24.dp))
-
-        if (rows.isEmpty()) {
-            Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                Text("No items in this playlist.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
+            TvEmptyState("Loading…")
+        } else if (rows.isEmpty()) {
+            TvEmptyState("No sets in this playlist.")
         } else {
             LazyColumn(
                 modifier = Modifier.weight(1f).fillMaxWidth(),
+                contentPadding = PaddingValues(bottom = 48.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 items(rows, key = { it.item.id }) { row ->
@@ -148,9 +143,6 @@ fun TvPlaylistDetailScreen(
                 }
             }
         }
-
-        Spacer(modifier = Modifier.height(16.dp))
-        Button(onClick = onBack) { Text("Back") }
     }
 }
 

@@ -1,26 +1,23 @@
 package nl.stoux.tfw.tv.ui.live
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.tv.material3.MaterialTheme
+import androidx.tv.material3.Text
+import nl.stoux.tfw.tv.ui.common.TvEmptyState
+import nl.stoux.tfw.tv.ui.common.TvListCard
+import nl.stoux.tfw.tv.ui.common.TvScreenScaffold
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -91,64 +88,52 @@ fun TvLiveScreen(
     val state by viewModel.uiState.collectAsState()
     val activeRoom by viewModel.activeRoom.collectAsState()
 
-    Column(modifier = Modifier.fillMaxSize().padding(48.dp)) {
-        Text("Live", style = MaterialTheme.typography.headlineLarge)
-        Spacer(modifier = Modifier.height(24.dp))
+    TvScreenScaffold(
+        title = "Live",
+        subtitle = "Listen along with someone who's playing right now",
+        onBack = onBack,
+    ) {
         when {
-            state.isLoading && state.sessions.isEmpty() -> Box(
-                modifier = Modifier.weight(1f).fillMaxWidth(),
-                contentAlignment = Alignment.Center,
-            ) {
-                CircularProgressIndicator()
-            }
-            state.sessions.isEmpty() -> Box(
-                modifier = Modifier.weight(1f).fillMaxWidth(),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    "No active live sessions",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+            state.isLoading && state.sessions.isEmpty() -> TvEmptyState("Loading…")
+            state.sessions.isEmpty() -> TvEmptyState("Nobody is listening right now")
             else -> LazyColumn(
                 modifier = Modifier.weight(1f).fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
+                contentPadding = PaddingValues(bottom = 48.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 items(state.sessions, key = { it.channelToken }) { session ->
                     val isActive = activeRoom?.channelToken == session.channelToken
-                    Card(modifier = Modifier.fillMaxWidth()) {
-                        Column(modifier = Modifier.padding(24.dp)) {
+                    // Select toggles: join in sync, or leave when already listening along
+                    TvListCard(onClick = {
+                        if (isActive) viewModel.leave() else viewModel.joinSync(session.channelToken)
+                    }) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
-                                session.liveset?.title ?: "Unknown liveset",
+                                text = session.liveset?.title ?: "Unknown liveset",
                                 style = MaterialTheme.typography.titleLarge,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f),
                             )
                             Text(
-                                "Hosted by ${session.host.name}",
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                text = if (isActive) "Listening along · select to leave" else "Select to listen along",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = if (isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                             )
-                            if (session.listenersCount > 0) {
-                                Text(
-                                    "${session.listenersCount} listener${if (session.listenersCount != 1) "s" else ""}",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(16.dp))
-                            if (isActive) {
-                                Button(onClick = { viewModel.leave() }) { Text("Leave") }
-                            } else {
-                                Button(onClick = { viewModel.joinSync(session.channelToken) }) {
-                                    Text("Listen along")
-                                }
-                            }
                         }
+                        val listeners = session.listenersCount
+                        Text(
+                            text = buildString {
+                                append("Hosted by ${session.host.name}")
+                                if (listeners > 0) append(" · $listeners listener${if (listeners != 1) "s" else ""}")
+                            },
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     }
                 }
             }
         }
-        Spacer(modifier = Modifier.height(16.dp))
-        Button(onClick = onBack) { Text("Back") }
     }
 }
