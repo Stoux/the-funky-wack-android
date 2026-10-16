@@ -251,10 +251,12 @@ class MainActivity : FragmentActivity() {
                         },
                         sheetContent = {
                             val commentBubble by commentsViewModel.bubble.collectAsState()
+                            val commentMarkerSeconds by commentsViewModel.markerSeconds.collectAsState()
                             PlayerScreen(
                                 viewModel = playerViewModel,
                                 isOpen = playerIsOpen,
                                 commentBubble = commentBubble,
+                                commentMarkerSeconds = commentMarkerSeconds,
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .navigationBarsPadding()

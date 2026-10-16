@@ -52,7 +52,20 @@ class CommentsViewModel @Inject constructor(
 
     private val live = MutableStateFlow(false)
 
+    /** Timestamps (seconds) of the playing set's visible top-level comments, for the waveform markers. */
+    val markerSeconds: StateFlow<List<Int>> = _uiState
+        .map { state -> state.comments.filter { !it.isDeleted }.map { it.timestampSeconds }.distinct() }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
     init {
+        // Keep the playing set's comments loaded, so markers and live merges always have a list
+        viewModelScope.launch {
+            queueManager.state.map { it.currentLivesetId }
+                .distinctUntilChanged()
+                .collect { livesetId -> load(livesetId) }
+        }
+
         // Follow realtime comments on the playing set while the app is in the foreground
         viewModelScope.launch {
             combine(queueManager.state.map { it.currentLivesetId }, live) { livesetId, isLive -> livesetId.takeIf { isLive } }

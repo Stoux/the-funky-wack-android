@@ -102,6 +102,7 @@ fun PlayerScreen(
     onCloseRequested: () -> Unit = {},
     onGoFullScreen: () -> Unit = {},
     commentBubble: LiveCommentDto? = null,
+    commentMarkerSeconds: List<Int> = emptyList(),
 ) {
     // Collect state
     val liveset by viewModel.currentLiveset.collectAsState()
@@ -223,6 +224,7 @@ fun PlayerScreen(
                     boxPadding = boxPadding,
                     showDetails = showDetails,
                     commentBubble = commentBubble,
+                    commentMarkerSeconds = commentMarkerSeconds,
                     onScrollDown = {
                         uiScope.launch {
                             onGoFullScreen()
@@ -380,6 +382,7 @@ fun PlayerControls(
     showDetails: Boolean,
     onScrollDown: () -> Unit,
     commentBubble: LiveCommentDto? = null,
+    commentMarkerSeconds: List<Int> = emptyList(),
 ) {
     val liveset by viewModel.currentLiveset.collectAsState()
 
@@ -488,7 +491,11 @@ fun PlayerControls(
                         onProgressChange = { p -> viewModel.seekToPercent(p) },
                         modifier = Modifier.matchParentSize(),
                         durationMs = durationMs,
-                        bufferedProgress = bufferedProgress
+                        bufferedProgress = bufferedProgress,
+                        markers = remember(commentMarkerSeconds, durationMs) {
+                            if (durationMs <= 0L) emptyList()
+                            else commentMarkerSeconds.map { it * 1000f / durationMs }
+                        },
                     )
                 }
                 peaks != null && peaks.isEmpty() -> {

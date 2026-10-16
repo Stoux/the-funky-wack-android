@@ -56,6 +56,7 @@ fun ZoomableWaveform(
     heightMultiplier: Float = 1f,
     maxZoom: Float = DEFAULT_MAXIMUM_ZOOM,
     bufferedProgress: Float? = null,
+    markers: List<Float> = emptyList(),
 ) {
     var zoom by remember { mutableFloatStateOf(MINIMUM_ZOOM) }
     var pan by remember { mutableFloatStateOf(0f) } // pan in indices
@@ -105,7 +106,8 @@ fun ZoomableWaveform(
             progressBrush = progressBrush,
             modifier = Modifier.matchParentSize(),
             heightMultiplier = heightMultiplier,
-            bufferedProgress = bufferedProgress
+            bufferedProgress = bufferedProgress,
+            markers = markers,
         )
     }
 }
@@ -122,6 +124,7 @@ fun AnimatedZoomableWaveform(
     durationMs: Long? = null,
     maxZoomOverride: Float? = null,
     bufferedProgress: Float? = null,
+    markers: List<Float> = emptyList(),
 ) {
     val height = remember { Animatable(1f) }
 
@@ -155,7 +158,8 @@ fun AnimatedZoomableWaveform(
         progressBrush = progressBrush,
         heightMultiplier = height.value,
         maxZoom = computedMaxZoom,
-        bufferedProgress = bufferedProgress
+        bufferedProgress = bufferedProgress,
+        markers = markers,
     )
 }
 
@@ -179,6 +183,8 @@ private fun Waveform(
     progressBrush: Brush = Brush.verticalGradient(listOf(Color.White, Color.LightGray)),
     heightMultiplier: Float = 1f,
     bufferedProgress: Float? = null,
+    markers: List<Float> = emptyList(),
+    markerColor: Color = Color(0xFFFFB74D),
 ) {
 
     // Target a SoundCloud-like thin bar look
@@ -425,5 +431,18 @@ private fun Waveform(
             )
         }
 
+        // Comment markers: small dots along the top, mapped through the same bars grid as progress
+        val markerRadius = 2.5.dp.toPx()
+        markers.forEach { fraction ->
+            val markerBar = fraction.coerceIn(0f, 1f) * totalSamples / samplesPerBar.toFloat()
+            val local = (markerBar - startBarIndex) / visibleCount.toFloat()
+            if (local in 0f..1f) {
+                drawCircle(
+                    color = markerColor,
+                    radius = markerRadius,
+                    center = Offset(local * size.width, markerRadius + 1.dp.toPx()),
+                )
+            }
+        }
     }
 }
