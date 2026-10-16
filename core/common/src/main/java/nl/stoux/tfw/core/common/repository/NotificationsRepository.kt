@@ -57,6 +57,11 @@ class NotificationsRepository @Inject constructor(
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
+    /** Cursor for the next (older) page, null when everything is loaded. */
+    @Volatile private var nextCursor: String? = null
+    private val _hasMore = MutableStateFlow(false)
+    val hasMore: StateFlow<Boolean> = _hasMore.asStateFlow()
+
     init {
         scope.launch {
             authRepository.isLoggedIn.collect { loggedIn ->
@@ -136,14 +141,40 @@ class NotificationsRepository @Inject constructor(
             try {
                 runCatching { api.getNotifications() }
                     .onSuccess {
+                        // Back to the first page; older pages load again on scroll
                         _notifications.value = it.notifications
                         _unreadCount.value = it.unreadCount
+                        nextCursor = it.nextCursor
+                        _hasMore.value = it.nextCursor != null
                     }
                     .onFailure { Log.w(TAG, "Failed to refresh notifications", it) }
                     .map { }
             } finally {
                 _isLoading.value = false
             }
+        }
+    }
+
+    /** Append the next (older) page. No-op when everything is loaded or a load is running. */
+    suspend fun loadMore(): Result<Unit> {
+        val cursor = nextCursor ?: return Result.success(Unit)
+        if (!refreshMutex.tryLock()) return Result.success(Unit)
+        return try {
+            _isLoading.value = true
+            runCatching { api.getNotifications(cursor = cursor) }
+                .onSuccess { page ->
+                    // Order is stable while new ones arrive live, but skip any we already have
+                    val known = _notifications.value.mapTo(HashSet()) { it.id }
+                    _notifications.update { it + page.notifications.filter { n -> n.id !in known } }
+                    _unreadCount.value = page.unreadCount
+                    nextCursor = page.nextCursor
+                    _hasMore.value = page.nextCursor != null
+                }
+                .onFailure { Log.w(TAG, "Failed to load more notifications", it) }
+                .map { }
+        } finally {
+            _isLoading.value = false
+            refreshMutex.unlock()
         }
     }
 
@@ -186,6 +217,8 @@ class NotificationsRepository @Inject constructor(
     private fun clear() {
         _notifications.value = emptyList()
         _unreadCount.value = 0
+        nextCursor = null
+        _hasMore.value = false
     }
 
     companion object {

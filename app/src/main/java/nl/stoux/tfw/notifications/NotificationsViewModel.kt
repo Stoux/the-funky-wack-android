@@ -19,6 +19,7 @@ class NotificationsViewModel @Inject constructor(
     val notifications: StateFlow<List<AppNotificationDto>> = notificationsRepository.notifications
     val unreadCount: StateFlow<Int> = notificationsRepository.unreadCount
     val isLoading: StateFlow<Boolean> = notificationsRepository.isLoading
+    val hasMore: StateFlow<Boolean> = notificationsRepository.hasMore
 
     init {
         refresh()
@@ -26,6 +27,10 @@ class NotificationsViewModel @Inject constructor(
 
     fun refresh() {
         viewModelScope.launch { notificationsRepository.refresh() }
+    }
+
+    fun loadMore() {
+        viewModelScope.launch { notificationsRepository.loadMore() }
     }
 
     fun markAllRead() {

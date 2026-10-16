@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Comment
@@ -28,8 +29,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -49,6 +53,7 @@ fun NotificationsScreen(
     val notifications by viewModel.notifications.collectAsState()
     val unreadCount by viewModel.unreadCount.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
+    val hasMore by viewModel.hasMore.collectAsState()
 
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
@@ -81,13 +86,34 @@ fun NotificationsScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.align(Alignment.Center).padding(24.dp),
                 )
-                else -> LazyColumn(modifier = Modifier.fillMaxSize()) {
-                    items(notifications, key = { it.id }) { notification ->
-                        NotificationRow(
-                            notification = notification,
-                            onClick = { if (viewModel.open(notification)) onOpenPlayer() },
-                        )
-                        HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
+                else -> {
+                    // Load the next page once the end of the list comes into view
+                    val listState = rememberLazyListState()
+                    val nearEnd by remember {
+                        derivedStateOf {
+                            val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+                            lastVisible >= listState.layoutInfo.totalItemsCount - 3
+                        }
+                    }
+                    LaunchedEffect(nearEnd, hasMore, notifications.size) {
+                        if (nearEnd && hasMore) viewModel.loadMore()
+                    }
+
+                    LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
+                        items(notifications, key = { it.id }) { notification ->
+                            NotificationRow(
+                                notification = notification,
+                                onClick = { if (viewModel.open(notification)) onOpenPlayer() },
+                            )
+                            HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
+                        }
+                        if (hasMore) {
+                            item(key = "load-more") {
+                                Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
+                                    CircularProgressIndicator(Modifier.size(24.dp))
+                                }
+                            }
+                        }
                     }
                 }
             }

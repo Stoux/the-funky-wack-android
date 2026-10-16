@@ -44,4 +44,6 @@ data class AppNotificationDataDto(
 data class NotificationsListResponse(
     val notifications: List<AppNotificationDto> = emptyList(),
     @SerialName("unread_count") val unreadCount: Int = 0,
+    /** Null on the last page. */
+    @SerialName("next_cursor") val nextCursor: String? = null,
 )

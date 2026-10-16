@@ -100,6 +100,8 @@ data class RecentCommentDto(
 @Serializable
 data class RecentCommentsResponse(
     val comments: List<RecentCommentDto> = emptyList(),
+    /** Null on the last page. */
+    @SerialName("next_cursor") val nextCursor: String? = null,
 )
 
 @Serializable

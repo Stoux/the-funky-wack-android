@@ -227,8 +227,12 @@ interface ApiService {
         @Query("sort") sort: String? = null,
     ): CommentsListResponse
 
+    /** Cursor paginated, newest first. Pass the response's `next_cursor` for the next page. */
     @GET("comments/recent")
-    suspend fun getRecentComments(): RecentCommentsResponse
+    suspend fun getRecentComments(
+        @Query("cursor") cursor: String? = null,
+        @Query("per_page") perPage: Int? = null,
+    ): RecentCommentsResponse
 
     // X-Socket-ID (our Reverb socket, when connected) makes the server skip us when broadcasting the change
 
@@ -254,8 +258,12 @@ interface ApiService {
 
     // --- Notifications ---
 
+    /** Cursor paginated, newest first. `unread_count` is the total, not per page. */
     @GET("notifications")
-    suspend fun getNotifications(): NotificationsListResponse
+    suspend fun getNotifications(
+        @Query("cursor") cursor: String? = null,
+        @Query("per_page") perPage: Int? = null,
+    ): NotificationsListResponse
 
     @PUT("notifications/{id}/read")
     suspend fun markNotificationRead(@Path("id") id: String): MessageResponse
