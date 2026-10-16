@@ -40,6 +40,7 @@ import nl.stoux.tfw.core.common.network.dto.auth.ReorderPlaylistItemsRequest
 import nl.stoux.tfw.core.common.network.dto.auth.SavePositionRequest
 import nl.stoux.tfw.core.common.network.dto.auth.UpdatePlaylistRequest
 import nl.stoux.tfw.core.common.network.dto.auth.UserDto
+import nl.stoux.tfw.core.common.network.dto.auth.UserResponse
 import nl.stoux.tfw.core.common.network.dto.auth.VisibilitySettingRequest
 import retrofit2.http.Body
 import retrofit2.http.DELETE
@@ -66,7 +67,7 @@ interface ApiService {
     suspend fun logout()
 
     @GET("auth/user")
-    suspend fun getUser(): UserDto
+    suspend fun getUser(): UserResponse
 
     @POST("auth/device-code")
     suspend fun requestDeviceCode(@Body request: DeviceCodeRequest): DeviceCodeResponse

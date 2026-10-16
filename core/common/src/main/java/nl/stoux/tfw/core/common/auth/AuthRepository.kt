@@ -80,7 +80,7 @@ class AuthRepository @Inject constructor(
      * Fetch the current user from the server (validates token).
      */
     suspend fun fetchUser(): UserDto {
-        val user = api.getUser()
+        val user = api.getUser().user
         storeUser(user)
         return user
     }

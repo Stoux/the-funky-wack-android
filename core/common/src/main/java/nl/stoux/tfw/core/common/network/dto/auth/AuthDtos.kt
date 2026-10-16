@@ -19,6 +19,13 @@ data class AuthResponse(
     val user: UserDto,
 )
 
+/** GET /api/auth/user wraps the user, next to whether they have a passkey. */
+@Serializable
+data class UserResponse(
+    val user: UserDto,
+    @SerialName("has_passkeys") val hasPasskeys: Boolean = false,
+)
+
 @Serializable
 data class UserDto(
     val id: Long,
