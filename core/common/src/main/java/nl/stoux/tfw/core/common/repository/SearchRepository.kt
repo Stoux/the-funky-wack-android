@@ -1,6 +1,7 @@
 package nl.stoux.tfw.core.common.repository
 
 import android.util.Log
+import kotlinx.coroutines.CancellationException
 import nl.stoux.tfw.core.common.network.ApiService
 import nl.stoux.tfw.core.common.network.dto.SearchResponse
 import javax.inject.Inject
@@ -18,8 +19,15 @@ class SearchRepository @Inject constructor(
     suspend fun search(query: String, limit: Int = DEFAULT_LIMIT): Result<SearchResponse> {
         val q = query.trim()
         if (q.length < MIN_QUERY_LENGTH) return Result.success(SearchResponse())
-        return runCatching { api.search(q.take(MAX_QUERY_LENGTH), limit.coerceIn(1, MAX_LIMIT)) }
-            .onFailure { Log.w(TAG, "Search failed for '$q'", it) }
+        return try {
+            Result.success(api.search(q.take(MAX_QUERY_LENGTH), limit.coerceIn(1, MAX_LIMIT)))
+        } catch (e: CancellationException) {
+            // A newer query superseded this one: let the caller's coroutine cancel, don't report a failure
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Search failed for '$q'", e)
+            Result.failure(e)
+        }
     }
 
     companion object {
