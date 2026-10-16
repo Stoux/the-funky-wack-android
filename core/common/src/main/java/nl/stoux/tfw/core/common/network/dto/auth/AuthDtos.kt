@@ -2,6 +2,7 @@ package nl.stoux.tfw.core.common.network.dto.auth
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonObject
 
 // --- Login ---
 
@@ -24,6 +25,69 @@ data class AuthResponse(
 data class UserResponse(
     val user: UserDto,
     @SerialName("has_passkeys") val hasPasskeys: Boolean = false,
+)
+
+// --- Passkeys ---
+
+/**
+ * WebAuthn options for Credential Manager. [options] is the plain PublicKeyCredentialRequestOptions
+ * (sign in) or CreationOptions (register) JSON, passed to Credential Manager as-is.
+ * The challenge is single use and expires after 5 minutes.
+ */
+@Serializable
+data class PasskeyOptionsResponse(
+    @SerialName("challenge_id") val challengeId: String,
+    val options: JsonObject,
+)
+
+/** A passkey challenge ready for Credential Manager: [requestJson] goes into its request as-is. */
+data class PasskeyChallenge(
+    val challengeId: String,
+    val requestJson: String,
+)
+
+fun PasskeyOptionsResponse.toChallenge() = PasskeyChallenge(challengeId, options.toString())
+
+@Serializable
+data class RenamePasskeyRequest(
+    val name: String,
+)
+
+@Serializable
+data class PasskeyLoginRequest(
+    @SerialName("challenge_id") val challengeId: String,
+    /** Credential Manager's authenticationResponseJson, as an object. */
+    val credential: JsonObject,
+    @SerialName("device_name") val deviceName: String,
+    @SerialName("device_type") val deviceType: String? = null,
+)
+
+@Serializable
+data class StorePasskeyRequest(
+    @SerialName("challenge_id") val challengeId: String,
+    val name: String,
+    /** Credential Manager's registrationResponseJson, as an object. */
+    val credential: JsonObject,
+)
+
+@Serializable
+data class PasskeyDto(
+    val id: Long,
+    val name: String,
+    /** e.g. "Google Password Manager" */
+    val authenticator: String? = null,
+    @SerialName("created_at") val createdAt: String? = null,
+    @SerialName("last_used_at") val lastUsedAt: String? = null,
+)
+
+@Serializable
+data class PasskeysResponse(
+    val passkeys: List<PasskeyDto> = emptyList(),
+)
+
+@Serializable
+data class PasskeyWrapper(
+    val passkey: PasskeyDto,
 )
 
 @Serializable

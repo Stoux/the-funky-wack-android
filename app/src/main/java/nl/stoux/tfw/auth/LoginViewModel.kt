@@ -61,11 +61,35 @@ class LoginViewModel @Inject constructor(
                 val deviceName = "${Build.MANUFACTURER} ${Build.MODEL}"
                 authRepository.login(state.email, state.password, deviceName, detectDeviceType(context))
                 _uiState.value = _uiState.value.copy(isLoading = false, loginSuccess = true)
+                // Learn whether to suggest making a passkey
+                runCatching { authRepository.fetchUser() }
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     error = e.message ?: "Login failed"
                 )
+            }
+        }
+    }
+
+    /** Sign in with a passkey (usernameless): options → Credential Manager → token. */
+    fun loginWithPasskey(credentials: PasskeyCredentials) {
+        if (_uiState.value.isLoading) return
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoading = true, error = null)
+            try {
+                val challenge = authRepository.getPasskeyLoginChallenge()
+                val response = credentials.signIn(challenge.requestJson)
+                if (response == null) {
+                    // Cancelled by the user
+                    _uiState.value = _uiState.value.copy(isLoading = false)
+                    return@launch
+                }
+                val deviceName = "${Build.MANUFACTURER} ${Build.MODEL}"
+                authRepository.loginWithPasskey(challenge.challengeId, response, deviceName, detectDeviceType(context))
+                _uiState.value = _uiState.value.copy(isLoading = false, loginSuccess = true)
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(isLoading = false, error = PasskeyCredentials.messageFor(e))
             }
         }
     }

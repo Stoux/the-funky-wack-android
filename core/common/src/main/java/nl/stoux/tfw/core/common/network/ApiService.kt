@@ -29,6 +29,13 @@ import nl.stoux.tfw.core.common.network.dto.auth.JoinSessionResponse
 import nl.stoux.tfw.core.common.network.dto.auth.LiveSessionDto
 import nl.stoux.tfw.core.common.network.dto.auth.LiveSessionsListResponse
 import nl.stoux.tfw.core.common.network.dto.auth.LoginRequest
+import nl.stoux.tfw.core.common.network.dto.auth.PasskeyLoginRequest
+import nl.stoux.tfw.core.common.network.dto.auth.PasskeyOptionsResponse
+import nl.stoux.tfw.core.common.network.dto.auth.PasskeyWrapper
+import nl.stoux.tfw.core.common.network.dto.auth.PasskeysResponse
+import nl.stoux.tfw.core.common.network.dto.auth.RenamePasskeyRequest
+import nl.stoux.tfw.core.common.network.dto.auth.StorePasskeyRequest
+import nl.stoux.tfw.core.common.network.dto.auth.UserResponse
 import nl.stoux.tfw.core.common.network.dto.auth.PlaybackEventRequest
 import nl.stoux.tfw.core.common.network.dto.auth.PlaybackPositionsListResponse
 import nl.stoux.tfw.core.common.network.dto.auth.PlaybackStartRequest
@@ -40,12 +47,12 @@ import nl.stoux.tfw.core.common.network.dto.auth.ReorderPlaylistItemsRequest
 import nl.stoux.tfw.core.common.network.dto.auth.SavePositionRequest
 import nl.stoux.tfw.core.common.network.dto.auth.UpdatePlaylistRequest
 import nl.stoux.tfw.core.common.network.dto.auth.UserDto
-import nl.stoux.tfw.core.common.network.dto.auth.UserResponse
 import nl.stoux.tfw.core.common.network.dto.auth.VisibilitySettingRequest
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.Header
+import retrofit2.http.PATCH
 import retrofit2.http.POST
 import retrofit2.http.PUT
 import retrofit2.http.Path
@@ -68,6 +75,29 @@ interface ApiService {
 
     @GET("auth/user")
     suspend fun getUser(): UserResponse
+
+    // --- Passkeys ---
+
+    @GET("auth/passkey/options")
+    suspend fun getPasskeyLoginOptions(): PasskeyOptionsResponse
+
+    @POST("auth/passkey")
+    suspend fun loginWithPasskey(@Body request: PasskeyLoginRequest): AuthResponse
+
+    @GET("passkeys")
+    suspend fun getPasskeys(): PasskeysResponse
+
+    @GET("passkeys/options")
+    suspend fun getPasskeyRegisterOptions(): PasskeyOptionsResponse
+
+    @POST("passkeys")
+    suspend fun registerPasskey(@Body request: StorePasskeyRequest): PasskeyWrapper
+
+    @PATCH("passkeys/{id}")
+    suspend fun renamePasskey(@Path("id") id: Long, @Body request: RenamePasskeyRequest): PasskeyWrapper
+
+    @DELETE("passkeys/{id}")
+    suspend fun deletePasskey(@Path("id") id: Long): MessageResponse
 
     @POST("auth/device-code")
     suspend fun requestDeviceCode(@Body request: DeviceCodeRequest): DeviceCodeResponse

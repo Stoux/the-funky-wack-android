@@ -16,7 +16,12 @@ import nl.stoux.tfw.core.common.network.dto.auth.DeviceCodeResponse
 import nl.stoux.tfw.core.common.network.dto.auth.DeviceCodePollResponse
 import nl.stoux.tfw.core.common.network.dto.auth.DeviceRegisterRequest
 import nl.stoux.tfw.core.common.network.dto.auth.LoginRequest
+import nl.stoux.tfw.core.common.network.dto.auth.PasskeyLoginRequest
+import nl.stoux.tfw.core.common.network.dto.auth.PasskeyChallenge
+import nl.stoux.tfw.core.common.network.dto.auth.toChallenge
 import nl.stoux.tfw.core.common.network.dto.auth.UserDto
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
 import android.os.Build
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -38,6 +43,10 @@ class AuthRepository @Inject constructor(
 
     private val _currentUser = MutableStateFlow<UserDto?>(null)
     val currentUser: StateFlow<UserDto?> = _currentUser.asStateFlow()
+
+    /** Null until known (from /auth/user or a passkey sign in). */
+    private val _hasPasskeys = MutableStateFlow<Boolean?>(null)
+    val hasPasskeys: StateFlow<Boolean?> = _hasPasskeys.asStateFlow()
 
     /** The current bearer token, or null if not logged in. */
     val token: String?
@@ -80,9 +89,35 @@ class AuthRepository @Inject constructor(
      * Fetch the current user from the server (validates token).
      */
     suspend fun fetchUser(): UserDto {
-        val user = api.getUser().user
-        storeUser(user)
-        return user
+        val response = api.getUser()
+        storeUser(response.user)
+        _hasPasskeys.value = response.hasPasskeys
+        return response.user
+    }
+
+    /** Start a passkey sign in: the options for Credential Manager plus the challenge to answer. */
+    suspend fun getPasskeyLoginChallenge(): PasskeyChallenge = api.getPasskeyLoginOptions().toChallenge()
+
+    /**
+     * Finish a passkey sign in with Credential Manager's authenticationResponseJson.
+     * Same result as a password login: a token for this device.
+     */
+    suspend fun loginWithPasskey(
+        challengeId: String,
+        authenticationResponseJson: String,
+        deviceName: String,
+        deviceType: String? = null,
+    ): UserDto {
+        val credential = Json.parseToJsonElement(authenticationResponseJson).jsonObject
+        val response = api.loginWithPasskey(PasskeyLoginRequest(challengeId, credential, deviceName, deviceType))
+        storeAuth(response.token, response.user)
+        _hasPasskeys.value = true
+        return response.user
+    }
+
+    /** Set after adding/removing passkeys, so the "make a passkey" hint stays in step. */
+    fun setHasPasskeys(hasPasskeys: Boolean) {
+        _hasPasskeys.value = hasPasskeys
     }
 
     /**
@@ -163,6 +198,7 @@ class AuthRepository @Inject constructor(
             .remove(KEY_USER_EMAIL)
             .apply()
         _currentUser.value = null
+        _hasPasskeys.value = null
         _isLoggedIn.value = false
     }
 

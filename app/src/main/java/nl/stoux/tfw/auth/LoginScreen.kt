@@ -10,7 +10,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.filled.Key
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -54,6 +56,9 @@ fun LoginScreen(
     val uiState by viewModel.uiState.collectAsState()
     val isLoggedIn by viewModel.isLoggedIn.collectAsState()
     val currentUser by viewModel.currentUser.collectAsState()
+    // Credential Manager needs the Activity context for its sheet
+    val context = LocalContext.current
+    val passkeyCredentials = remember(context) { PasskeyCredentials(context) }
 
     Column(
         modifier = Modifier
@@ -73,6 +78,7 @@ fun LoginScreen(
                 onAuthorizeDevice = viewModel::authorizeDevice,
                 onClearDeviceAuthSuccess = viewModel::clearDeviceAuthSuccess,
                 onLogout = viewModel::logout,
+                passkeyCredentials = passkeyCredentials,
             )
         } else {
             LoginFormContent(
@@ -83,6 +89,7 @@ fun LoginScreen(
                 onEmailChanged = viewModel::updateEmail,
                 onPasswordChanged = viewModel::updatePassword,
                 onLogin = viewModel::login,
+                onPasskeyLogin = { viewModel.loginWithPasskey(passkeyCredentials) },
             )
         }
     }
@@ -100,6 +107,7 @@ private fun LoggedInContent(
     onAuthorizeDevice: () -> Unit,
     onClearDeviceAuthSuccess: () -> Unit,
     onLogout: () -> Unit,
+    passkeyCredentials: PasskeyCredentials,
 ) {
     Text("Profile", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
     Spacer(modifier = Modifier.height(12.dp))
@@ -110,6 +118,12 @@ private fun LoggedInContent(
     OutlinedButton(onClick = onLogout, modifier = Modifier.fillMaxWidth()) {
         Text("Log out")
     }
+
+    Spacer(modifier = Modifier.height(32.dp))
+    HorizontalDivider()
+    Spacer(modifier = Modifier.height(24.dp))
+
+    PasskeysSection(passkeyCredentials = passkeyCredentials)
 
     Spacer(modifier = Modifier.height(32.dp))
     HorizontalDivider()
@@ -170,6 +184,7 @@ private fun LoginFormContent(
     onEmailChanged: (String) -> Unit,
     onPasswordChanged: (String) -> Unit,
     onLogin: () -> Unit,
+    onPasskeyLogin: () -> Unit,
 ) {
     val context = LocalContext.current
     val focusManager = LocalFocusManager.current
@@ -237,6 +252,18 @@ private fun LoginFormContent(
         } else {
             Text("Login")
         }
+    }
+
+    Spacer(modifier = Modifier.height(8.dp))
+
+    OutlinedButton(
+        onClick = onPasskeyLogin,
+        enabled = !isLoading,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Icon(Icons.Default.Key, contentDescription = null, modifier = Modifier.size(18.dp))
+        Spacer(modifier = Modifier.width(8.dp))
+        Text("Sign in with passkey")
     }
 
     Spacer(modifier = Modifier.height(16.dp))
