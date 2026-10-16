@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -43,12 +44,15 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import coil.compose.AsyncImage
 import nl.stoux.tfw.core.common.database.entity.artworkUrl
+import nl.stoux.tfw.tv.ui.comments.TvCommentsPanel
+import nl.stoux.tfw.tv.ui.comments.TvCommentsViewModel
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun TvNowPlayingScreen(
     onBack: () -> Unit,
     viewModel: TvNowPlayingViewModel = hiltViewModel(),
+    commentsViewModel: TvCommentsViewModel = hiltViewModel(),
 ) {
     val isPlaying by viewModel.isPlaying.collectAsState()
     val isBuffering by viewModel.isBuffering.collectAsState()
@@ -71,13 +75,23 @@ fun TvNowPlayingScreen(
     val oledController = rememberOledModeController()
 
     var showTracklistDialog by remember { mutableStateOf(false) }
+    var showComments by remember { mutableStateOf(false) }
     var isWaveformFocused by remember { mutableStateOf(false) }
     val playPauseFocusRequester = remember { FocusRequester() }
+    val commentsFocusRequester = remember { FocusRequester() }
 
     val liveset = currentLiveset?.liveset
     val tracks = currentLiveset?.tracks ?: emptyList()
     val artistName = liveset?.artistName ?: ""
     val artworkUrl = currentLiveset?.edition?.artworkUrl
+
+    // Comments: count follows Room (refreshed by every fetch), falls back to the playing snapshot
+    val commentsState by commentsViewModel.uiState.collectAsState()
+    val storedCommentsCount by commentsViewModel.commentsCount.collectAsState()
+    val commentsCount = storedCommentsCount ?: liveset?.commentsCount
+    LaunchedEffect(liveset?.id) {
+        commentsViewModel.bind(liveset?.id)
+    }
 
     // Handle OLED mode transitions
     LaunchedEffect(isOledModeActive) {
@@ -262,6 +276,9 @@ fun TvNowPlayingScreen(
                                 onToggleOledMode = { viewModel.toggleOledMode() },
                                 onAudioQualityChange = { viewModel.setAudioQuality(it) },
                                 playPauseFocusRequester = playPauseFocusRequester,
+                                commentsCount = commentsCount,
+                                onOpenComments = { showComments = true },
+                                commentsFocusRequester = commentsFocusRequester,
                             )
                         }
 
@@ -377,6 +394,38 @@ fun TvNowPlayingScreen(
                 },
                 onDismiss = { showTracklistDialog = false }
             )
+        }
+
+        // Read-only comments side panel
+        if (showComments && liveset != null) {
+            DisposableEffect(liveset.id) {
+                commentsViewModel.open(liveset.id)
+                onDispose { commentsViewModel.close() }
+            }
+            TvCommentsPanel(
+                livesetTitle = liveset.title,
+                commentsCount = commentsCount,
+                state = commentsState,
+                currentPositionMs = positionMs,
+                onCommentClick = { comment ->
+                    viewModel.seekTo(comment.timestampSeconds.toLong() * 1000L)
+                    showComments = false
+                },
+                onRetry = { commentsViewModel.retry() },
+                onDismiss = { showComments = false },
+                onInteraction = { viewModel.onUserInteraction() },
+            )
+        }
+    }
+
+    // Hand focus back to the Comments button once the panel closes
+    var commentsWereOpen by remember { mutableStateOf(false) }
+    LaunchedEffect(showComments) {
+        if (showComments) {
+            commentsWereOpen = true
+        } else if (commentsWereOpen) {
+            commentsWereOpen = false
+            runCatching { commentsFocusRequester.requestFocus() }
         }
     }
 }

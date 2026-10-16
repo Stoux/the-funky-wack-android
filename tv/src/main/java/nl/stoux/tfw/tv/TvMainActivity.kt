@@ -8,6 +8,7 @@ import androidx.lifecycle.lifecycleScope
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import nl.stoux.tfw.core.common.repository.NotificationsRepository
 import nl.stoux.tfw.service.playback.service.queue.QueueManager
 import nl.stoux.tfw.tv.navigation.TvNavHost
 import nl.stoux.tfw.tv.ui.theme.TvTheme
@@ -18,6 +19,9 @@ class TvMainActivity : ComponentActivity() {
 
     @Inject
     lateinit var queueManager: QueueManager
+
+    @Inject
+    lateinit var notificationsRepository: NotificationsRepository
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -38,5 +42,22 @@ class TvMainActivity : ComponentActivity() {
                 TvNavHost()
             }
         }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        // New notifications arrive live while the app is visible
+        notificationsRepository.startLive()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Cheap poll on foreground so the unread badge isn't stale
+        notificationsRepository.refreshAsync()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        notificationsRepository.stopLive()
     }
 }

@@ -10,7 +10,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import nl.stoux.tfw.core.common.auth.AuthRepository
 import nl.stoux.tfw.core.common.database.dao.EditionWithContent
+import nl.stoux.tfw.core.common.repository.NotificationsRepository
 import nl.stoux.tfw.core.common.database.dao.LivesetWithDetails
 import nl.stoux.tfw.core.common.database.entity.TrackEntity
 import nl.stoux.tfw.core.common.repository.EditionRepository
@@ -34,7 +36,13 @@ class TvBrowseViewModel @Inject constructor(
     private val queueManager: QueueManager,
     private val livesetTrackManager: LivesetTrackManager,
     private val playbackStateRepository: PlaybackStateRepository,
+    authRepository: AuthRepository,
+    notificationsRepository: NotificationsRepository,
 ) : ViewModel() {
+
+    /** Notifications are login-only; the header entry hides when logged out. */
+    val isLoggedIn: StateFlow<Boolean> = authRepository.isLoggedIn
+    val unreadNotificationCount: StateFlow<Int> = notificationsRepository.unreadCount
 
     val editions: StateFlow<List<EditionWithContent>> = repository
         .getEditions()

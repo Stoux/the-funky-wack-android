@@ -33,6 +33,7 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.Comment
 import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.FastRewind
@@ -60,6 +61,9 @@ fun TvPlaybackControls(
     onAudioQualityChange: (AudioQuality) -> Unit,
     modifier: Modifier = Modifier,
     playPauseFocusRequester: FocusRequester? = null,
+    commentsCount: Int? = null,
+    onOpenComments: (() -> Unit)? = null,
+    commentsFocusRequester: FocusRequester? = null,
 ) {
     var showQualityDialog by remember { mutableStateOf(false) }
 
@@ -194,6 +198,42 @@ fun TvPlaybackControls(
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onSurface
                 )
+            }
+        }
+
+        // Comments (read-only panel)
+        if (onOpenComments != null) {
+            Spacer(modifier = Modifier.width(12.dp))
+
+            Surface(
+                onClick = onOpenComments,
+                modifier = if (commentsFocusRequester != null) Modifier.focusRequester(commentsFocusRequester) else Modifier,
+                colors = ClickableSurfaceDefaults.colors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    focusedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
+                ),
+                shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(8.dp)),
+                scale = ClickableSurfaceDefaults.scale(focusedScale = 1.05f),
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Outlined.Comment,
+                        contentDescription = "Comments (${commentsCount ?: 0})",
+                        modifier = Modifier.size(20.dp),
+                        tint = MaterialTheme.colorScheme.onSurface
+                    )
+                    if (commentsCount != null && commentsCount > 0) {
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = commentsCount.toString(),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
             }
         }
     }

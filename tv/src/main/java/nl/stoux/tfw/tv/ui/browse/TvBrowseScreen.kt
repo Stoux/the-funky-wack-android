@@ -6,23 +6,36 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.unit.dp
+import nl.stoux.tfw.tv.ui.common.requestFocusWhenAttached
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Icon
@@ -42,6 +55,7 @@ fun TvBrowseScreen(
     onPlaylistsClick: () -> Unit = {},
     onLiveClick: () -> Unit = {},
     onLoginClick: () -> Unit = {},
+    onNotificationsClick: () -> Unit = {},
     viewModel: TvBrowseViewModel = hiltViewModel(),
 ) {
     val editions by viewModel.editions.collectAsState()
@@ -49,6 +63,19 @@ fun TvBrowseScreen(
     val currentLiveset by viewModel.currentLiveset.collectAsState()
     val currentTrack by viewModel.currentTrack.collectAsState()
     val resumeState by viewModel.resumeState.collectAsState()
+    val isLoggedIn by viewModel.isLoggedIn.collectAsState()
+    val unreadNotificationCount by viewModel.unreadNotificationCount.collectAsState()
+
+    // Back from Notifications lands on its header button again. The flag survives the back stack
+    // and is deliberately not an effect key: it's only acted on when this screen is composed again.
+    val notificationsFocusRequester = remember { FocusRequester() }
+    var returnFocusToNotifications by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(editions.isNotEmpty(), isLoggedIn) {
+        if (returnFocusToNotifications && editions.isNotEmpty() && isLoggedIn) {
+            requestFocusWhenAttached(notificationsFocusRequester)
+            returnFocusToNotifications = false
+        }
+    }
 
     Box(
         modifier = Modifier
@@ -102,15 +129,30 @@ fun TvBrowseScreen(
                                 color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
                             )
                         }
-                        IconButton(
-                            onClick = onSettingsClick,
-                            modifier = Modifier.size(48.dp)
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.Settings,
-                                contentDescription = "Settings",
-                                modifier = Modifier.size(28.dp)
-                            )
+                            if (isLoggedIn) {
+                                NotificationsButton(
+                                    unreadCount = unreadNotificationCount,
+                                    onClick = {
+                                        returnFocusToNotifications = true
+                                        onNotificationsClick()
+                                    },
+                                    modifier = Modifier.focusRequester(notificationsFocusRequester),
+                                )
+                            }
+                            IconButton(
+                                onClick = onSettingsClick,
+                                modifier = Modifier.size(48.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Settings,
+                                    contentDescription = "Settings",
+                                    modifier = Modifier.size(28.dp)
+                                )
+                            }
                         }
                     }
                 }
@@ -169,6 +211,46 @@ fun TvBrowseScreen(
                 item {
                     Spacer(modifier = Modifier.height(48.dp))
                 }
+            }
+        }
+    }
+}
+
+/** Bell with an unread badge, styled like the Settings icon button next to it. */
+@OptIn(ExperimentalTvMaterial3Api::class)
+@Composable
+private fun NotificationsButton(
+    unreadCount: Int,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(modifier = modifier) {
+        IconButton(
+            onClick = onClick,
+            modifier = Modifier.size(48.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.Notifications,
+                contentDescription = if (unreadCount > 0) "Notifications ($unreadCount unread)" else "Notifications",
+                modifier = Modifier.size(28.dp)
+            )
+        }
+        if (unreadCount > 0) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .offset(x = 4.dp, y = (-4).dp)
+                    .defaultMinSize(minWidth = 20.dp, minHeight = 20.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primary)
+                    .padding(horizontal = 5.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = if (unreadCount > 99) "99+" else unreadCount.toString(),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onPrimary,
+                )
             }
         }
     }

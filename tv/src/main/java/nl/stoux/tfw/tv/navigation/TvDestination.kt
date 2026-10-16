@@ -32,4 +32,7 @@ sealed interface TvDestination {
 
     @Serializable
     data object Devices : TvDestination
+
+    @Serializable
+    data object Notifications : TvDestination
 }

@@ -11,6 +11,7 @@ import nl.stoux.tfw.tv.ui.devices.TvDevicesScreen
 import nl.stoux.tfw.tv.ui.browse.TvEditionDetailScreen
 import nl.stoux.tfw.tv.ui.favorites.TvFavoritesScreen
 import nl.stoux.tfw.tv.ui.live.TvLiveScreen
+import nl.stoux.tfw.tv.ui.notifications.TvNotificationsScreen
 import nl.stoux.tfw.tv.ui.player.TvNowPlayingScreen
 import nl.stoux.tfw.tv.ui.playlists.TvPlaylistDetailScreen
 import nl.stoux.tfw.tv.ui.playlists.TvPlaylistsScreen
@@ -49,6 +50,9 @@ fun TvNavHost() {
                 },
                 onLoginClick = {
                     navController.navigate(TvDestination.DeviceCodeLogin)
+                },
+                onNotificationsClick = {
+                    navController.navigate(TvDestination.Notifications)
                 },
             )
         }
@@ -132,6 +136,17 @@ fun TvNavHost() {
 
         composable<TvDestination.Devices> {
             TvDevicesScreen()
+        }
+
+        composable<TvDestination.Notifications> {
+            TvNotificationsScreen(
+                onOpenPlayer = {
+                    navController.navigate(TvDestination.NowPlaying) { launchSingleTop = true }
+                },
+                onBack = {
+                    navController.popBackStack()
+                }
+            )
         }
     }
 }
