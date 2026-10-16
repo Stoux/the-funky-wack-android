@@ -18,6 +18,7 @@ import androidx.media3.session.LibraryResult
 import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaSession
 import androidx.media3.session.SessionCommand
+import androidx.media3.session.SessionError
 import androidx.media3.session.SessionResult
 import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.Futures
@@ -306,38 +307,29 @@ class MediaPlaybackService : MediaLibraryService() {
             val future = SettableFuture.create<MediaSession.MediaItemsWithStartPosition>()
             serviceIOScope.launch {
                 try {
-                    val lastState = playbackStateRepository.lastState().firstOrNull()
-                    if (lastState == null || lastState.mediaId.isEmpty()) {
-                        future.setException(IllegalStateException("No playback state to resume"))
-                        return@launch
-                    }
-
-                    val mediaId = CustomMediaId.from(lastState.mediaId)
-                    val livesetId = mediaId.getLivesetId()
-                    if (livesetId == null) {
-                        future.setException(IllegalStateException("Invalid media ID for resumption"))
-                        return@launch
-                    }
-
-                    // Build the queue via QueueManager to keep state in sync (includes manual queue)
-                    val result = queueManager.buildContextForResumption(livesetId)
-                    if (result == null) {
-                        future.setException(IllegalStateException("No playable items found for resumption"))
-                        return@launch
-                    }
-
-                    val (mediaItems, startIndex) = result
-                    future.set(MediaSession.MediaItemsWithStartPosition(
-                        mediaItems,
-                        startIndex,
-                        lastState.positionMs
-                    ))
+                    future.set(buildResumption())
                 } catch (e: Exception) {
                     Log.e("MediaPlaybackService", "Failed to resume playback", e)
                     future.setException(e)
                 }
             }
             return future
+        }
+
+        private suspend fun buildResumption(): MediaSession.MediaItemsWithStartPosition {
+            val lastState = playbackStateRepository.lastState().firstOrNull()
+            if (lastState == null || lastState.mediaId.isEmpty()) {
+                throw IllegalStateException("No playback state to resume")
+            }
+
+            val livesetId = CustomMediaId.from(lastState.mediaId).getLivesetId()
+                ?: throw IllegalStateException("Invalid media ID for resumption")
+
+            // Build the queue via QueueManager to keep state in sync (includes manual queue)
+            val (mediaItems, startIndex) = queueManager.buildContextForResumption(livesetId)
+                ?: throw IllegalStateException("No playable items found for resumption")
+
+            return MediaSession.MediaItemsWithStartPosition(mediaItems, startIndex, lastState.positionMs)
         }
 
         override fun onCustomCommand(
@@ -398,9 +390,20 @@ class MediaPlaybackService : MediaLibraryService() {
             controller: MediaSession.ControllerInfo,
             mediaItems: MutableList<MediaItem>
         ): ListenableFuture<List<MediaItem>> {
-            // Check if it was a track action encoded in the mediaId (legacy behavior: id@seconds)
             val firstItem = mediaItems.firstOrNull()
-            if (firstItem?.mediaId?.contains("@") == true) {
+
+            // Voice search via addMediaItems: queue the top hit (a plain add can't carry a start position)
+            val searchQuery = firstItem?.searchQueryOrNull()
+            if (searchQuery != null) {
+                return Futures.transform(
+                    playFromSearch(searchQuery),
+                    { it.mediaItems },
+                    MoreExecutors.directExecutor(),
+                )
+            }
+
+            // Track jump inside the set that's already loaded (liveset:<id>@<seconds>): just seek
+            if (firstItem != null && isJumpWithinCurrentSet(firstItem)) {
                 val player = playerManager.currentPlayer()
                 val seekTo = firstItem.mediaId.substringAfter("@").toLongOrNull()
                 if (seekTo != null) {
@@ -417,15 +420,7 @@ class MediaPlaybackService : MediaLibraryService() {
                     if (mediaItems.size > 1) {
                         Log.e("MediaPlaybackService", "Playback service received multiple Media items to play? Unsupported! IDs: ${mediaItems.joinToString { it.mediaId }}")
                     }
-
-                    val first = mediaItems[0]
-                    val customId = CustomMediaId.from(first.mediaId)
-                    val extras = first.mediaMetadata.extras
-                    val playlistShareCode = extras
-                        ?.getString(nl.stoux.tfw.service.playback.service.session.EXTRA_PLAYLIST_SHARE_CODE)
-                    val fromFavorites = extras
-                        ?.getBoolean(nl.stoux.tfw.service.playback.service.session.EXTRA_FROM_FAVORITES) == true
-                    resolveQueue(customId, playlistShareCode, fromFavorites)
+                    resolveQueue(mediaItems[0])
                 }
                 else -> emptyList()
             }
@@ -436,6 +431,9 @@ class MediaPlaybackService : MediaLibraryService() {
         /**
          * Controllers (Android Auto / Automotive) set items without a start index, so with shuffle on
          * ExoPlayer would start at a random set. resolveQueue always puts the tapped liveset first.
+         *
+         * A `liveset:<id>@<seconds>` item for another set than the loaded one (search hits, Continue
+         * listening) loads that set's queue and starts at the timestamp instead of seeking the current one.
          */
         @OptIn(UnstableApi::class)
         override fun onSetMediaItems(
@@ -445,11 +443,73 @@ class MediaPlaybackService : MediaLibraryService() {
             startIndex: Int,
             startPositionMs: Long,
         ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> {
+            val first = mediaItems.firstOrNull()
+
+            // "Play X on The Funky Wack" (playFromSearch): empty mediaId + a search query
+            val searchQuery = first?.searchQueryOrNull()
+            if (searchQuery != null) return playFromSearch(searchQuery)
+
+            val customId = first?.let { CustomMediaId.fromOrNull(it.mediaId) }
+            val timestampSec = customId?.timestamp
+            if (first != null && customId?.isLiveset() == true && timestampSec != null && !isJumpWithinCurrentSet(first)) {
+                val items = runCatching { resolveQueue(first) }.getOrElse { return Futures.immediateFailedFuture(it) }
+                return Futures.immediateFuture(
+                    MediaSession.MediaItemsWithStartPosition(items, 0, timestampSec * 1000L)
+                )
+            }
+
             return Futures.transform(
                 onAddMediaItems(mediaSession, controller, mediaItems),
                 { items -> MediaSession.MediaItemsWithStartPosition(items, 0, startPositionMs) },
                 MoreExecutors.directExecutor(),
             )
+        }
+
+        /** Legacy play/prepareFromSearch arrive as an item with the default (empty) mediaId and a search query. */
+        private fun MediaItem.searchQueryOrNull(): String? =
+            requestMetadata.searchQuery?.takeIf { mediaId.isEmpty() }
+
+        /** `liveset:<id>@<seconds>` for the set that's currently loaded in the player. */
+        private fun isJumpWithinCurrentSet(item: MediaItem): Boolean {
+            val customId = CustomMediaId.fromOrNull(item.mediaId) ?: return false
+            if (customId.timestamp == null || !customId.isLiveset()) return false
+            val currentLivesetId = mediaLibrarySession?.player?.currentMediaItem?.mediaId
+                ?.let { CustomMediaId.fromOrNull(it)?.getLivesetId() }
+            return currentLivesetId != null && currentLivesetId == customId.getLivesetId()
+        }
+
+        /**
+         * Voice search: start the top backend hit (local match when offline) at its timestamp.
+         * A blank query ("play The Funky Wack") resumes the last played set.
+         */
+        private fun playFromSearch(query: String): ListenableFuture<MediaSession.MediaItemsWithStartPosition> {
+            val future = SettableFuture.create<MediaSession.MediaItemsWithStartPosition>()
+            serviceIOScope.launch {
+                try {
+                    if (query.isBlank()) {
+                        future.set(buildResumption())
+                        return@launch
+                    }
+                    val target = libraryManager.resolveSearchPlayTarget(query)
+                        ?: throw IllegalStateException("No playable search hit for '$query'")
+                    val items = libraryManager.getQueueBasedForLiveset(target.livesetId)
+                    future.set(MediaSession.MediaItemsWithStartPosition(items, 0, target.startPositionMs))
+                } catch (e: Exception) {
+                    Log.w("MediaPlaybackService", "Voice search failed for '$query'", e)
+                    future.setException(e)
+                }
+            }
+            return future
+        }
+
+        private fun resolveQueue(item: MediaItem): List<MediaItem> {
+            val customId = CustomMediaId.fromOrNull(item.mediaId) ?: return emptyList()
+            val extras = item.mediaMetadata.extras
+            val playlistShareCode = extras
+                ?.getString(nl.stoux.tfw.service.playback.service.session.EXTRA_PLAYLIST_SHARE_CODE)
+            val fromFavorites = extras
+                ?.getBoolean(nl.stoux.tfw.service.playback.service.session.EXTRA_FROM_FAVORITES) == true
+            return resolveQueue(customId, playlistShareCode, fromFavorites)
         }
 
         private fun resolveQueue(
@@ -479,9 +539,17 @@ class MediaPlaybackService : MediaLibraryService() {
             query: String,
             params: LibraryParams?
         ): ListenableFuture<LibraryResult<Void>> {
-            // Get result count and notify client that results are ready
-            val resultCount = libraryManager.search(query, 0, Int.MAX_VALUE).size
-            session.notifySearchResultChanged(browser, query, resultCount, params)
+            // Accept right away, notify the browser with the count once the backend answered
+            serviceIOScope.launch {
+                val resultCount = runCatching { libraryManager.searchItems(query, 0, Int.MAX_VALUE).size }
+                    .getOrElse {
+                        Log.w("MediaPlaybackService", "Search failed for '$query'", it)
+                        0
+                    }
+                serviceMainScope.launch {
+                    session.notifySearchResultChanged(browser, query, resultCount, params)
+                }
+            }
             return Futures.immediateFuture(LibraryResult.ofVoid())
         }
 
@@ -493,8 +561,16 @@ class MediaPlaybackService : MediaLibraryService() {
             pageSize: Int,
             params: LibraryParams?
         ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> {
-            val results = libraryManager.search(query, page, pageSize)
-            return Futures.immediateFuture(LibraryResult.ofItemList(ImmutableList.copyOf(results), params))
+            val future = SettableFuture.create<LibraryResult<ImmutableList<MediaItem>>>()
+            serviceIOScope.launch {
+                runCatching { libraryManager.searchItems(query, page, pageSize) }
+                    .onSuccess { future.set(LibraryResult.ofItemList(ImmutableList.copyOf(it), params)) }
+                    .onFailure {
+                        Log.w("MediaPlaybackService", "Search results failed for '$query'", it)
+                        future.set(LibraryResult.ofError(SessionError.ERROR_UNKNOWN, params))
+                    }
+            }
+            return future
         }
 
     }

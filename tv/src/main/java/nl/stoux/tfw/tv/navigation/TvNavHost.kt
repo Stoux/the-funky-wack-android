@@ -15,6 +15,7 @@ import nl.stoux.tfw.tv.ui.notifications.TvNotificationsScreen
 import nl.stoux.tfw.tv.ui.player.TvNowPlayingScreen
 import nl.stoux.tfw.tv.ui.playlists.TvPlaylistDetailScreen
 import nl.stoux.tfw.tv.ui.playlists.TvPlaylistsScreen
+import nl.stoux.tfw.tv.ui.search.TvSearchScreen
 import nl.stoux.tfw.tv.ui.settings.TvSettingsScreen
 
 @Composable
@@ -57,6 +58,16 @@ fun TvNavHost() {
                 onDevicesClick = {
                     navController.navigate(TvDestination.Devices)
                 },
+                onSearchClick = {
+                    navController.navigate(TvDestination.Search)
+                },
+            )
+        }
+
+        composable<TvDestination.Search> {
+            TvSearchScreen(
+                onPlay = { navController.navigate(TvDestination.NowPlaying) { launchSingleTop = true } },
+                onBack = { navController.popBackStack() },
             )
         }
 

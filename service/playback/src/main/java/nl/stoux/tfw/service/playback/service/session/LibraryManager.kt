@@ -19,11 +19,15 @@ import kotlinx.coroutines.launch
 import nl.stoux.tfw.core.common.auth.AuthRepository
 import nl.stoux.tfw.core.common.database.dao.EditionWithContent
 import nl.stoux.tfw.core.common.database.dao.LivesetWithDetails
+import androidx.media3.session.MediaConstants
+import nl.stoux.tfw.core.common.network.dto.SearchResponse
 import nl.stoux.tfw.core.common.network.dto.auth.PlaylistDto
+import nl.stoux.tfw.core.common.network.dto.trackDisplayName
 import nl.stoux.tfw.core.common.repository.EditionRepository
 import nl.stoux.tfw.core.common.repository.FavoritesRepository
 import nl.stoux.tfw.core.common.repository.PlaybackPositionRepository
 import nl.stoux.tfw.core.common.repository.PlaylistRepository
+import nl.stoux.tfw.core.common.repository.SearchRepository
 import nl.stoux.tfw.core.common.database.entity.artworkUrl
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -49,6 +53,7 @@ class LibraryManager @Inject constructor(
     private val favoritesRepository: FavoritesRepository,
     private val playlistRepository: PlaylistRepository,
     private val playbackPositionRepository: PlaybackPositionRepository,
+    private val searchRepository: SearchRepository,
 ) {
 
     private val isAutomotive: Boolean by lazy {
@@ -639,6 +644,150 @@ class LibraryManager @Inject constructor(
         })
 
         return paginate(results, page, pageSize)
+    }
+
+    /** Where a search hit starts playing. */
+    data class SearchPlayTarget(val livesetId: Long, val startPositionMs: Long)
+
+    private data class CachedSearch(val query: String, val items: List<MediaItem>, val atMs: Long)
+
+    @Volatile
+    private var lastSearch: CachedSearch? = null
+
+    /**
+     * Backend search (sets, track appearances, unlinked tracklist lines) as playable items, grouped
+     * for Android Auto. Falls back to the local [search] when the request fails (offline).
+     * The last query is cached briefly: onSearch and onGetSearchResult ask for the same query
+     * right after each other and the server throttles at 60/min.
+     */
+    suspend fun searchItems(query: String, page: Int, pageSize: Int): List<MediaItem> {
+        val q = query.trim()
+        if (q.isEmpty()) return emptyList()
+        val now = System.currentTimeMillis()
+        val cached = lastSearch?.takeIf { it.query == q && now - it.atMs < SEARCH_CACHE_MS }
+        val items = cached?.items ?: searchRepository.search(q, SEARCH_LIMIT).fold(
+            onSuccess = { mapSearchResponse(it) },
+            onFailure = { search(q, 0, Int.MAX_VALUE) },
+        ).also { lastSearch = CachedSearch(q, it, now) }
+        return paginate(items, page, pageSize)
+    }
+
+    /**
+     * Voice search ("play X on The Funky Wack"): the top hit to start. A set wins unless only
+     * a track/line actually contains the query. Falls back to the local search when offline.
+     */
+    suspend fun resolveSearchPlayTarget(query: String): SearchPlayTarget? {
+        val q = query.trim()
+        val response = searchRepository.search(q, SEARCH_LIMIT).getOrNull()
+            ?: return search(q, 0, Int.MAX_VALUE).firstNotNullOfOrNull { item ->
+                CustomMediaId.fromOrNull(item.mediaId)?.getLivesetId()?.let { SearchPlayTarget(it, 0L) }
+            }
+
+        val sets = response.livesets.filter { isPlayable(it.id) }.map { SearchPlayTarget(it.id, 0L) }
+        val appearances = response.tracks.flatMap { track ->
+            track.appearances.filter { isPlayable(it.livesetId) }.map { a ->
+                Triple(trackDisplayName(track.artist, track.title, track.version), a.livesetId, a.timestamp)
+            }
+        }
+        val lines = response.unlinkedLines.filter { isPlayable(it.livesetId) }
+
+        val qLower = q.lowercase()
+        val setContainsQuery = response.livesets.any {
+            isPlayable(it.id) && (it.title.lowercase().contains(qLower) || it.artistName.lowercase().contains(qLower))
+        }
+        val trackHit = appearances.firstOrNull()?.let { (_, livesetId, ts) -> SearchPlayTarget(livesetId, (ts ?: 0) * 1000L) }
+        val trackContainsQuery = appearances.firstOrNull()?.first?.lowercase()?.contains(qLower) == true
+        val lineHit = lines.firstOrNull()?.let { SearchPlayTarget(it.livesetId, (it.timestamp ?: 0) * 1000L) }
+
+        return when {
+            trackHit != null && trackContainsQuery && !setContainsQuery -> trackHit
+            sets.isNotEmpty() -> sets.first()
+            else -> trackHit ?: lineHit
+        }
+    }
+
+    private fun isPlayable(livesetId: Long): Boolean =
+        editionRepository.getCachedLiveset(livesetId)?.let { PlayableMediaItemBuilder.build(it) } != null
+
+    private fun mapSearchResponse(response: SearchResponse): List<MediaItem> {
+        val items = mutableListOf<MediaItem>()
+        response.livesets.forEach { hit ->
+            val lwd = editionRepository.getCachedLiveset(hit.id) ?: return@forEach
+            items.add(withGroupTitle(livesetMediaItem(lwd, showEditionInfo = true), GROUP_SETS))
+        }
+        response.tracks.forEach { track ->
+            val name = trackDisplayName(track.artist, track.title, track.version)
+            track.appearances.take(MAX_APPEARANCES_PER_TRACK).forEach { a ->
+                searchHitItem(a.livesetId, a.timestamp, name, a.livesetTitle, a.editionNumber, GROUP_TRACKS)
+                    ?.let(items::add)
+            }
+        }
+        response.unlinkedLines.forEach { l ->
+            searchHitItem(l.livesetId, l.timestamp, l.line, l.livesetTitle, l.editionNumber, GROUP_LINES)
+                ?.let(items::add)
+        }
+        // Auto keys rows on mediaId; the same set+timestamp twice would be the same hit anyway
+        return items.distinctBy { it.mediaId }
+    }
+
+    /**
+     * A hit inside a set: plays that set from [timestampSec] via the `liveset:<id>@<sec>` media ID.
+     * Skipped when the set isn't cached locally (catalog not refreshed yet) or has no audio.
+     */
+    private fun searchHitItem(
+        livesetId: Long,
+        timestampSec: Int?,
+        title: String,
+        livesetTitle: String,
+        editionNumber: String?,
+        group: String,
+    ): MediaItem? {
+        val lwd = editionRepository.getCachedLiveset(livesetId) ?: return null
+        if (PlayableMediaItemBuilder.build(lwd) == null) return null
+        val subtitle = listOfNotNull(
+            livesetTitle,
+            editionNumber?.let { "TFW #$it" },
+            timestampSec?.let { formatTimestamp(it) },
+        ).joinToString(" · ")
+        return MediaItem.Builder()
+            .setMediaId("liveset:$livesetId@${timestampSec ?: 0}")
+            .setMediaMetadata(
+                MediaMetadata.Builder()
+                    .setTitle(title)
+                    .setArtist(subtitle)
+                    .setArtworkUri(lwd.edition.artworkUrl?.toUri())
+                    .setIsBrowsable(false)
+                    .setIsPlayable(true)
+                    .setExtras(Bundle().apply { putString(MediaConstants.EXTRAS_KEY_CONTENT_STYLE_GROUP_TITLE, group) })
+                    .build()
+            )
+            .build()
+    }
+
+    private fun withGroupTitle(item: MediaItem, group: String): MediaItem {
+        val extras = (item.mediaMetadata.extras ?: Bundle()).apply {
+            putString(MediaConstants.EXTRAS_KEY_CONTENT_STYLE_GROUP_TITLE, group)
+        }
+        return item.buildUpon()
+            .setMediaMetadata(item.mediaMetadata.buildUpon().setExtras(extras).build())
+            .build()
+    }
+
+    @SuppressLint("DefaultLocale")
+    private fun formatTimestamp(seconds: Int): String {
+        val h = seconds / 3600
+        val m = (seconds % 3600) / 60
+        val s = seconds % 60
+        return if (h > 0) String.format("%d:%02d:%02d", h, m, s) else String.format("%02d:%02d", m, s)
+    }
+
+    private companion object {
+        const val SEARCH_LIMIT = 10
+        const val SEARCH_CACHE_MS = 60_000L
+        const val MAX_APPEARANCES_PER_TRACK = 5
+        const val GROUP_SETS = "Sets"
+        const val GROUP_TRACKS = "Tracks"
+        const val GROUP_LINES = "Tracklist lines"
     }
 
 }

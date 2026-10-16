@@ -24,6 +24,7 @@ import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.Devices
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Sensors
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -65,6 +66,7 @@ fun TvBrowseScreen(
     onLoginClick: () -> Unit = {},
     onNotificationsClick: () -> Unit = {},
     onDevicesClick: () -> Unit = {},
+    onSearchClick: () -> Unit = {},
     viewModel: TvBrowseViewModel = hiltViewModel(),
 ) {
     val editions by viewModel.editions.collectAsState()
@@ -183,6 +185,7 @@ fun TvBrowseScreen(
                         onClick = { item ->
                             returnFocusToNav = item
                             when (item) {
+                                NavItem.Search -> onSearchClick()
                                 NavItem.Favorites -> onFavoritesClick()
                                 NavItem.Playlists -> onPlaylistsClick()
                                 NavItem.Live -> onLiveClick()
@@ -253,6 +256,7 @@ fun TvBrowseScreen(
 }
 
 private enum class NavItem(val label: String, val icon: ImageVector) {
+    Search("Search", Icons.Default.Search),
     Favorites("Favorites", Icons.Default.Favorite),
     Playlists("Playlists", Icons.AutoMirrored.Filled.QueueMusic),
     Live("Live", Icons.Default.Sensors),
@@ -268,9 +272,9 @@ private fun TvNavRow(
     onClick: (NavItem) -> Unit,
 ) {
     val items = if (isLoggedIn) {
-        listOf(NavItem.Favorites, NavItem.Playlists, NavItem.Live, NavItem.Devices)
+        listOf(NavItem.Search, NavItem.Favorites, NavItem.Playlists, NavItem.Live, NavItem.Devices)
     } else {
-        listOf(NavItem.Login, NavItem.Live)
+        listOf(NavItem.Login, NavItem.Search, NavItem.Live)
     }
     Row(
         modifier = Modifier

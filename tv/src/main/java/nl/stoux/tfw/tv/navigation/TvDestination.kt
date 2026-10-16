@@ -35,4 +35,7 @@ sealed interface TvDestination {
 
     @Serializable
     data object Notifications : TvDestination
+
+    @Serializable
+    data object Search : TvDestination
 }
