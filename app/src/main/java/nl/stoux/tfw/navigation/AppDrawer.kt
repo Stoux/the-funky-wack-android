@@ -7,6 +7,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Album
 import androidx.compose.material.icons.filled.Devices
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.LibraryMusic
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.MailOutline
 import androidx.compose.material.icons.filled.Notifications
@@ -26,7 +28,9 @@ import androidx.compose.ui.unit.dp
 
 enum class AppScreen(val title: String, val icon: ImageVector) {
     Browse("Browse", Icons.Default.Album),
+    Search("Search", Icons.Default.Search),
     Favorites("Favorites", Icons.Default.Favorite),
+    LikedTracks("Liked tracks", Icons.Default.LibraryMusic),
     Notifications("Notifications", Icons.Default.Notifications),
     Playlists("Playlists", Icons.AutoMirrored.Filled.PlaylistPlay),
     Live("Live", Icons.Default.LiveTv),
@@ -62,12 +66,27 @@ fun AppDrawerContent(
             modifier = Modifier.padding(horizontal = 12.dp),
         )
 
+        NavigationDrawerItem(
+            icon = { Icon(AppScreen.Search.icon, contentDescription = null) },
+            label = { Text(AppScreen.Search.title) },
+            selected = currentScreen == AppScreen.Search,
+            onClick = { onScreenSelected(AppScreen.Search) },
+            modifier = Modifier.padding(horizontal = 12.dp),
+        )
+
         if (isLoggedIn) {
             NavigationDrawerItem(
                 icon = { Icon(AppScreen.Favorites.icon, contentDescription = null) },
                 label = { Text(AppScreen.Favorites.title) },
                 selected = currentScreen == AppScreen.Favorites,
                 onClick = { onScreenSelected(AppScreen.Favorites) },
+                modifier = Modifier.padding(horizontal = 12.dp),
+            )
+            NavigationDrawerItem(
+                icon = { Icon(AppScreen.LikedTracks.icon, contentDescription = null) },
+                label = { Text(AppScreen.LikedTracks.title) },
+                selected = currentScreen == AppScreen.LikedTracks,
+                onClick = { onScreenSelected(AppScreen.LikedTracks) },
                 modifier = Modifier.padding(horizontal = 12.dp),
             )
             NavigationDrawerItem(

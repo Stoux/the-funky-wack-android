@@ -28,9 +28,14 @@ import androidx.compose.material3.SheetValue
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Search
+import nl.stoux.tfw.search.SearchScreen
+import nl.stoux.tfw.tracks.LikedTracksScreen
+import nl.stoux.tfw.tracks.TrackScreen
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Surface
@@ -105,6 +110,17 @@ class MainActivity : FragmentActivity() {
     // Using MutableSharedFlow for thread-safe event passing from Activity lifecycle to Compose
     private val showPlayerRequest = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
 
+    // Requests to open a track page by slug, from outside the Compose tree (see openTrack)
+    private val trackOpenRequests = MutableSharedFlow<String>(extraBufferCapacity = 8)
+
+    /**
+     * Open the track page for [slug] on top of the current screen (back returns to it).
+     * Inside setContent, prefer the local `openTrack` lambda; this is for code that only has the Activity.
+     */
+    fun openTrack(slug: String) {
+        trackOpenRequests.tryEmit(slug)
+    }
+
     // App update launcher for Play In-App Updates
     private val updateLauncher = registerForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.StartIntentSenderForResult()
@@ -147,13 +163,37 @@ class MainActivity : FragmentActivity() {
                 var playerIsFullScreen by remember { mutableStateOf(false) }
                 var currentScreen by remember { mutableStateOf(AppScreen.Browse) }
                 var addToPlaylistLivesetId by remember { mutableStateOf<Long?>(null) }
+                // Track pages stacked on top of currentScreen (last = visible). Empty = no track page.
+                var trackStack by remember { mutableStateOf(emptyList<String>()) }
                 val scope = rememberCoroutineScope()
+
+                val openPlayer: () -> Unit = { scope.launch { scaffoldState.bottomSheetState.expand() } }
+
+                // Single entry point for opening a track page (search, liked tracks, other versions,
+                // and later the player's tracklist). Clears the queue/comments overlays and the
+                // player sheet so the page is actually visible.
+                val openTrack: (String) -> Unit = { slug ->
+                    playerViewModel.closeQueue()
+                    playerViewModel.closeComments()
+                    if (trackStack.lastOrNull() != slug) trackStack = trackStack + slug
+                    scope.launch {
+                        if (drawerState.isOpen) drawerState.close()
+                        if (scaffoldState.bottomSheetState.currentValue == SheetValue.Expanded) {
+                            scaffoldState.bottomSheetState.partialExpand()
+                        }
+                    }
+                }
 
                 // React to external request to open player (e.g., notification tap)
                 LaunchedEffect(Unit) {
                     showPlayerRequest.collectLatest {
                         scaffoldState.bottomSheetState.expand()
                     }
+                }
+
+                // Track pages requested through MainActivity.openTrack
+                LaunchedEffect(Unit) {
+                    trackOpenRequests.collect { openTrack(it) }
                 }
 
                 // Always restore the player to normal size when closed
@@ -185,9 +225,9 @@ class MainActivity : FragmentActivity() {
                     if (drawerState.isOpen) notificationsRepository.refreshAsync()
                 }
 
-                // Notifications are login-only; bounce back to Browse on logout
+                // Notifications and liked tracks are login-only; bounce back to Browse on logout
                 LaunchedEffect(isLoggedIn) {
-                    if (!isLoggedIn && currentScreen == AppScreen.Notifications) {
+                    if (!isLoggedIn && (currentScreen == AppScreen.Notifications || currentScreen == AppScreen.LikedTracks)) {
                         currentScreen = AppScreen.Browse
                     }
                 }
@@ -206,6 +246,7 @@ class MainActivity : FragmentActivity() {
                             unreadNotificationCount = unreadNotificationCount,
                             onScreenSelected = { screen ->
                                 currentScreen = screen
+                                trackStack = emptyList()
                                 playerViewModel.closeComments()
                                 scope.launch { drawerState.close() }
                             },
@@ -220,16 +261,33 @@ class MainActivity : FragmentActivity() {
                         topBar = {
                             CenterAlignedTopAppBar(
                                 navigationIcon = {
-                                    IconButton(onClick = {
-                                        scope.launch {
-                                            if (playerIsOpen) scaffoldState.bottomSheetState.partialExpand()
-                                            drawerState.open()
+                                    if (trackStack.isNotEmpty()) {
+                                        IconButton(onClick = { trackStack = trackStack.dropLast(1) }) {
+                                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                                         }
-                                    }) {
-                                        BadgedBox(
-                                            badge = { if (unreadNotificationCount > 0) Badge() }
-                                        ) {
-                                            Icon(Icons.Default.Menu, contentDescription = "Menu")
+                                    } else {
+                                        IconButton(onClick = {
+                                            scope.launch {
+                                                if (playerIsOpen) scaffoldState.bottomSheetState.partialExpand()
+                                                drawerState.open()
+                                            }
+                                        }) {
+                                            BadgedBox(
+                                                badge = { if (unreadNotificationCount > 0) Badge() }
+                                            ) {
+                                                Icon(Icons.Default.Menu, contentDescription = "Menu")
+                                            }
+                                        }
+                                    }
+                                },
+                                actions = {
+                                    if (currentScreen == AppScreen.Browse && trackStack.isEmpty()) {
+                                        IconButton(onClick = {
+                                            playerViewModel.closeQueue()
+                                            playerViewModel.closeComments()
+                                            currentScreen = AppScreen.Search
+                                        }) {
+                                            Icon(Icons.Default.Search, contentDescription = "Search")
                                         }
                                     }
                                 },
@@ -237,8 +295,11 @@ class MainActivity : FragmentActivity() {
                                     androidx.compose.foundation.layout.Column(
                                         horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally
                                     ) {
-                                        Text(text = currentScreen.title, style = MaterialTheme.typography.titleLarge)
-                                        if (currentScreen == AppScreen.Browse) {
+                                        Text(
+                                            text = if (trackStack.isNotEmpty()) "Track" else currentScreen.title,
+                                            style = MaterialTheme.typography.titleLarge,
+                                        )
+                                        if (currentScreen == AppScreen.Browse && trackStack.isEmpty()) {
                                             Text(
                                                 text = "Wacky beats, the recordings.",
                                                 style = MaterialTheme.typography.labelSmall,
@@ -257,6 +318,7 @@ class MainActivity : FragmentActivity() {
                                 isOpen = playerIsOpen,
                                 commentBubble = commentBubble,
                                 commentMarkerSeconds = commentMarkerSeconds,
+                                onOpenTrack = openTrack,
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .navigationBarsPadding()
@@ -308,6 +370,14 @@ class MainActivity : FragmentActivity() {
                                 playerViewModel.closeComments()
                             }
 
+                            // Track pages pop one at a time before the screen-level back kicks in.
+                            // Registered after the queue/comments handlers, so those must be excluded here.
+                            BackHandler(
+                                enabled = trackStack.isNotEmpty() && !showQueue && !showComments && !playerIsOpen && !drawerState.isOpen
+                            ) {
+                                trackStack = trackStack.dropLast(1)
+                            }
+
                             androidx.compose.foundation.layout.Box(modifier = Modifier.weight(1f)) {
                                 if (showQueue) {
                                     nl.stoux.tfw.feature.player.QueueScreen(
@@ -325,6 +395,17 @@ class MainActivity : FragmentActivity() {
                                             currentScreen = AppScreen.Account
                                         },
                                         modifier = Modifier.fillMaxSize(),
+                                    )
+                                } else if (trackStack.isNotEmpty()) {
+                                    TrackScreen(
+                                        slug = trackStack.last(),
+                                        onBack = { trackStack = trackStack.dropLast(1) },
+                                        onOpenTrack = openTrack,
+                                        onOpenPlayer = openPlayer,
+                                        onLoginRequested = {
+                                            trackStack = emptyList()
+                                            currentScreen = AppScreen.Account
+                                        },
                                     )
                                 } else {
                                     when (currentScreen) {
@@ -347,8 +428,16 @@ class MainActivity : FragmentActivity() {
                                                 onAddToPlaylist = if (isLoggedIn) ({ id -> addToPlaylistLivesetId = id }) else null,
                                             )
                                         }
+                                        AppScreen.Search -> SearchScreen(
+                                            onOpenPlayer = openPlayer,
+                                            onOpenTrack = openTrack,
+                                        )
                                         AppScreen.Favorites -> FavoritesScreen(
                                             onPlayClicked = { mediaId -> playerViewModel.playLiveset(CustomMediaId.from(mediaId)) },
+                                        )
+                                        AppScreen.LikedTracks -> LikedTracksScreen(
+                                            onOpenTrack = openTrack,
+                                            onOpenPlayer = openPlayer,
                                         )
                                         AppScreen.Playlists -> PlaylistsScreen(
                                             onPlayClicked = { mediaId -> playerViewModel.playLiveset(CustomMediaId.from(mediaId)) },
