@@ -23,6 +23,11 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.automirrored.outlined.Comment
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.foundation.clickable
+import nl.stoux.tfw.core.common.network.dto.TrackSong
+import nl.stoux.tfw.core.common.network.dto.displayName
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material.icons.filled.Cast
@@ -103,6 +108,8 @@ fun PlayerScreen(
     onGoFullScreen: () -> Unit = {},
     commentBubble: LiveCommentDto? = null,
     commentMarkerSeconds: List<Int> = emptyList(),
+    /** Open the track page for a canonical track (slug). */
+    onOpenTrack: (String) -> Unit = {},
 ) {
     // Collect state
     val liveset by viewModel.currentLiveset.collectAsState()
@@ -252,11 +259,16 @@ fun PlayerScreen(
                 // Tracklist
                 if (showTrackList) {
                     val currentTrack by viewModel.currentTrack.collectAsState()
+                    val likedSlugs by viewModel.likedSlugs.collectAsState()
+                    val canLike by viewModel.canLikeTracks.collectAsState()
                     TrackList(
                         tracks = liveset?.tracks ?: emptyList(),
                         currentTrack = currentTrack,
                         boxPadding = boxPadding,
-                        seekToTrack = { sec -> viewModel.seekTo(sec * 1000L) }
+                        seekToTrack = { sec -> viewModel.seekTo(sec * 1000L) },
+                        likedSlugs = if (canLike) likedSlugs else null,
+                        onLikeChange = viewModel::setTrackLiked,
+                        onOpenTrack = onOpenTrack,
                     )
                 }
             }
@@ -562,6 +574,18 @@ fun PlayerControls(
                             iterations = Int.MAX_VALUE,
                         )
                 )
+                // Heart for the track that's playing now (first linked track for a mashup)
+                val nowPlayingSong = currentTrack?.songs?.firstOrNull()
+                val canLike by viewModel.canLikeTracks.collectAsState()
+                if (canLike && nowPlayingSong != null) {
+                    val likedSlugs by viewModel.likedSlugs.collectAsState()
+                    TrackLikeButton(
+                        song = nowPlayingSong,
+                        liked = nowPlayingSong.slug in likedSlugs,
+                        onLikeChange = viewModel::setTrackLiked,
+                        size = 28.dp,
+                    )
+                }
                 Text(
                     text = formatTime(durationMs),
                     style = MaterialTheme.typography.labelSmall,
@@ -889,11 +913,32 @@ fun LivesetDescription(
 }
 
 @Composable
+private fun TrackLikeButton(
+    song: TrackSong,
+    liked: Boolean,
+    onLikeChange: (TrackSong, Boolean) -> Unit,
+    size: Dp = 48.dp,
+) {
+    IconButton(onClick = { onLikeChange(song, !liked) }, modifier = Modifier.size(size)) {
+        Icon(
+            imageVector = if (liked) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+            contentDescription = if (liked) "Unlike ${song.displayName()}" else "Like ${song.displayName()}",
+            tint = if (liked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(if (size < 40.dp) 18.dp else 22.dp),
+        )
+    }
+}
+
+@Composable
 fun TrackList(
     tracks: List<TrackEntity>,
     currentTrack: TrackEntity?,
     boxPadding: Dp,
     seekToTrack: (timestamp: Int) -> Unit = {},
+    /** Null hides the hearts (logged out). */
+    likedSlugs: Set<String>? = null,
+    onLikeChange: (TrackSong, Boolean) -> Unit = { _, _ -> },
+    onOpenTrack: (String) -> Unit = {},
 ) {
     Column(
         modifier = Modifier
@@ -936,12 +981,46 @@ fun TrackList(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
+                    val songs = track.songs.orEmpty()
+                    // A line linked to exactly one track opens its page; mashups list each track below
                     Text(
                         text = track.title,
                         style = MaterialTheme.typography.bodyLarge,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = if (songs.size == 1) {
+                            Modifier.clickable(onClickLabel = "Open track") { onOpenTrack(songs.first().slug) }
+                        } else Modifier,
                     )
+                    if (songs.size > 1) {
+                        songs.forEach { song ->
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = song.displayName(),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier
+                                        .weight(1f, fill = false)
+                                        .clickable(onClickLabel = "Open track") { onOpenTrack(song.slug) },
+                                )
+                                if (likedSlugs != null) {
+                                    TrackLikeButton(
+                                        song = song,
+                                        liked = song.slug in likedSlugs,
+                                        onLikeChange = onLikeChange,
+                                        size = 32.dp,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (likedSlugs != null && track.songs?.size == 1) {
+                    val song = track.songs!!.first()
+                    TrackLikeButton(song = song, liked = song.slug in likedSlugs, onLikeChange = onLikeChange)
                 }
 
                 // Right: play from timestamp button (icon only, no background)

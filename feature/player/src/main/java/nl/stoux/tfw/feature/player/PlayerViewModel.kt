@@ -47,6 +47,9 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import nl.stoux.tfw.core.common.repository.EditionRepository
+import nl.stoux.tfw.core.common.repository.TrackRepository
+import nl.stoux.tfw.core.common.auth.AuthRepository
+import nl.stoux.tfw.core.common.network.dto.TrackSong
 
 @HiltViewModel
 class PlayerViewModel @Inject constructor(
@@ -59,7 +62,19 @@ class PlayerViewModel @Inject constructor(
     private val playerManager: PlayerManager,
     private val listenAlongCoordinator: ListenAlongCoordinator,
     private val editionRepository: EditionRepository,
+    private val trackRepository: TrackRepository,
+    authRepository: AuthRepository,
 ) : ViewModel() {
+
+    /** Liked canonical tracks (slugs), for the hearts in the tracklist and next to now playing. */
+    val likedSlugs: StateFlow<Set<String>> = trackRepository.likedSlugs
+
+    /** Hearts only show when logged in; liking needs an account. */
+    val canLikeTracks: StateFlow<Boolean> = authRepository.isLoggedIn
+
+    fun setTrackLiked(song: TrackSong, liked: Boolean) {
+        viewModelScope.launch { trackRepository.setLiked(song, liked) }
+    }
 
     init {
         // Mirror host actions when the user is in a synced listen-along room
