@@ -58,6 +58,7 @@ fun LivesetTrackDto.toTrackEntity(): TrackEntity = TrackEntity(
     title = title,
     timestampSec = timestamp,
     orderInSet = order,
+    songs = songs,
 )
 
 private fun EditionDto.selectOptimizedPosterUrl(): String? {

@@ -5,6 +5,10 @@ import nl.stoux.tfw.core.common.network.dto.CommentsListResponse
 import nl.stoux.tfw.core.common.network.dto.CreateCommentRequest
 import nl.stoux.tfw.core.common.network.dto.EditionDto
 import nl.stoux.tfw.core.common.network.dto.MessageResponse
+import nl.stoux.tfw.core.common.network.dto.SearchResponse
+import nl.stoux.tfw.core.common.network.dto.TrackDetailResponse
+import nl.stoux.tfw.core.common.network.dto.TrackLikeResponse
+import nl.stoux.tfw.core.common.network.dto.TrackLikesResponse
 import nl.stoux.tfw.core.common.network.dto.NotificationsListResponse
 import nl.stoux.tfw.core.common.network.dto.RecentCommentsResponse
 import nl.stoux.tfw.core.common.network.dto.UpdateCommentRequest
@@ -75,6 +79,25 @@ interface ApiService {
 
     @GET("auth/user")
     suspend fun getUser(): UserResponse
+
+    // --- Search & tracks ---
+
+    /** [q] 2-100 chars, [limit] 1-25. Public, throttled 60/min. */
+    @GET("search")
+    suspend fun search(@Query("q") q: String, @Query("limit") limit: Int? = null): SearchResponse
+
+    /** Public; is_liked is only set with a Bearer token. 404 for an unknown (or merged-away) slug. */
+    @GET("tracks/{slug}")
+    suspend fun getTrack(@Path("slug") slug: String): TrackDetailResponse
+
+    @GET("track-likes")
+    suspend fun getTrackLikes(): TrackLikesResponse
+
+    @PUT("tracks/{slug}/like")
+    suspend fun likeTrack(@Path("slug") slug: String): TrackLikeResponse
+
+    @DELETE("tracks/{slug}/like")
+    suspend fun unlikeTrack(@Path("slug") slug: String): TrackLikeResponse
 
     // --- Passkeys ---
 

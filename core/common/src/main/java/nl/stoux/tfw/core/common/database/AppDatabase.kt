@@ -2,6 +2,7 @@ package nl.stoux.tfw.core.common.database
 
 import androidx.room.Database
 import androidx.room.RoomDatabase
+import androidx.room.TypeConverters
 import nl.stoux.tfw.core.common.database.dao.EditionDao
 import nl.stoux.tfw.core.common.database.dao.FavoriteDao
 import nl.stoux.tfw.core.common.database.dao.LivesetDownloadDao
@@ -30,9 +31,10 @@ import nl.stoux.tfw.core.common.database.entity.TrackEntity
         PlaylistItemEntity::class,
         PlaybackPositionEntity::class,
     ],
-    version = 10,
+    version = 11,
     exportSchema = true,
 )
+@TypeConverters(SongListConverter::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun editionDao(): EditionDao
     abstract fun manualQueueDao(): ManualQueueDao
