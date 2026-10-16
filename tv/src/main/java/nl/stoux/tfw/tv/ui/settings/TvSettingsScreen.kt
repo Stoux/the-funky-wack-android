@@ -17,8 +17,14 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.tv.material3.Button
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -42,6 +48,7 @@ fun TvSettingsScreen(
     val bufferMinutes by viewModel.bufferMinutes.collectAsState()
     val isLoggedIn by viewModel.isLoggedIn.collectAsState()
     val listeningVisibility by viewModel.listeningVisibility.collectAsState()
+    val userName by viewModel.userName.collectAsState()
 
     LazyColumn(
         modifier = Modifier
@@ -219,11 +226,41 @@ fun TvSettingsScreen(
                     } },
                 )
             }
+            item {
+                SignOutRow(userName = userName, onSignOut = viewModel::signOut)
+            }
         }
 
         // Bottom padding
         item {
             Spacer(modifier = Modifier.height(32.dp))
+        }
+    }
+}
+
+/** Sign out needs a second press within a few seconds, so a stray D-pad click doesn't log you out. */
+@OptIn(ExperimentalTvMaterial3Api::class)
+@Composable
+private fun SignOutRow(userName: String?, onSignOut: () -> Unit) {
+    var confirming by remember { mutableStateOf(false) }
+    LaunchedEffect(confirming) {
+        if (confirming) {
+            delay(4_000)
+            confirming = false
+        }
+    }
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = userName?.let { "Signed in as $it" } ?: "Signed in",
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onBackground,
+        )
+        Button(onClick = { if (confirming) onSignOut() else confirming = true }) {
+            Text(if (confirming) "Press again to sign out" else "Sign out")
         }
     }
 }

@@ -30,6 +30,14 @@ class TvSettingsViewModel @Inject constructor(
         .map { it?.listeningVisibility ?: "everyone" }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "everyone")
 
+    val userName: StateFlow<String?> = authRepository.currentUser
+        .map { it?.name }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    fun signOut() {
+        viewModelScope.launch { authRepository.logout() }
+    }
+
     fun setListeningVisibility(value: String) {
         viewModelScope.launch {
             userSettingsRepository.setListeningVisibility(value)
