@@ -17,9 +17,17 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Login
+import androidx.compose.material.icons.automirrored.filled.QueueMusic
+import androidx.compose.material.icons.filled.Devices
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Sensors
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.tv.material3.Button
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -56,6 +64,7 @@ fun TvBrowseScreen(
     onLiveClick: () -> Unit = {},
     onLoginClick: () -> Unit = {},
     onNotificationsClick: () -> Unit = {},
+    onDevicesClick: () -> Unit = {},
     viewModel: TvBrowseViewModel = hiltViewModel(),
 ) {
     val editions by viewModel.editions.collectAsState()
@@ -70,10 +79,19 @@ fun TvBrowseScreen(
     // and is deliberately not an effect key: it's only acted on when this screen is composed again.
     val notificationsFocusRequester = remember { FocusRequester() }
     var returnFocusToNotifications by rememberSaveable { mutableStateOf(false) }
+    // Same for the nav row: back lands on the button that was used, not the first one
+    val navFocusRequesters = remember { NavItem.entries.associateWith { FocusRequester() } }
+    var returnFocusToNav by rememberSaveable { mutableStateOf<NavItem?>(null) }
+
     LaunchedEffect(editions.isNotEmpty(), isLoggedIn) {
         if (returnFocusToNotifications && editions.isNotEmpty() && isLoggedIn) {
             requestFocusWhenAttached(notificationsFocusRequester)
             returnFocusToNotifications = false
+        }
+        val navItem = returnFocusToNav
+        if (navItem != null && editions.isNotEmpty()) {
+            requestFocusWhenAttached(navFocusRequesters.getValue(navItem))
+            returnFocusToNav = null
         }
     }
 
@@ -157,6 +175,24 @@ fun TvBrowseScreen(
                     }
                 }
 
+                // Links to the other screens (only Live and login when logged out)
+                item {
+                    TvNavRow(
+                        isLoggedIn = isLoggedIn,
+                        focusRequesters = navFocusRequesters,
+                        onClick = { item ->
+                            returnFocusToNav = item
+                            when (item) {
+                                NavItem.Favorites -> onFavoritesClick()
+                                NavItem.Playlists -> onPlaylistsClick()
+                                NavItem.Live -> onLiveClick()
+                                NavItem.Devices -> onDevicesClick()
+                                NavItem.Login -> onLoginClick()
+                            }
+                        },
+                    )
+                }
+
                 // Now Playing card (if something is playing/paused) OR Continue card (if resume state exists)
                 item {
                     if (hasNowPlaying) {
@@ -213,6 +249,53 @@ fun TvBrowseScreen(
                 }
             }
         }
+    }
+}
+
+private enum class NavItem(val label: String, val icon: ImageVector) {
+    Favorites("Favorites", Icons.Default.Favorite),
+    Playlists("Playlists", Icons.AutoMirrored.Filled.QueueMusic),
+    Live("Live", Icons.Default.Sensors),
+    Devices("Devices", Icons.Default.Devices),
+    Login("Log in", Icons.AutoMirrored.Filled.Login),
+}
+
+@OptIn(ExperimentalTvMaterial3Api::class)
+@Composable
+private fun TvNavRow(
+    isLoggedIn: Boolean,
+    focusRequesters: Map<NavItem, FocusRequester>,
+    onClick: (NavItem) -> Unit,
+) {
+    val items = if (isLoggedIn) {
+        listOf(NavItem.Favorites, NavItem.Playlists, NavItem.Live, NavItem.Devices)
+    } else {
+        listOf(NavItem.Login, NavItem.Live)
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 48.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        items.forEach { item ->
+            TvNavButton(
+                label = item.label,
+                icon = item.icon,
+                onClick = { onClick(item) },
+                modifier = Modifier.focusRequester(focusRequesters.getValue(item)),
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalTvMaterial3Api::class)
+@Composable
+private fun TvNavButton(label: String, icon: ImageVector, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Button(onClick = onClick, modifier = modifier) {
+        Icon(imageVector = icon, contentDescription = null, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(8.dp))
+        Text(label)
     }
 }
 

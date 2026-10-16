@@ -54,6 +54,9 @@ fun TvNavHost() {
                 onNotificationsClick = {
                     navController.navigate(TvDestination.Notifications)
                 },
+                onDevicesClick = {
+                    navController.navigate(TvDestination.Devices)
+                },
             )
         }
 
